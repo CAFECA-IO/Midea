@@ -1,0 +1,35 @@
+name: animated-explainer
+title: 動畫解說片
+feature: text-to-video
+description: 一句話 → 腳本、旁白、配樂、動態圖形 + H3 鏡頭、字幕壓製。適合「60 秒解釋神經網路」。
+defaults:
+  aspect: '16:9'
+  pacing:
+  - 3
+  - 8
+  visual_kinds:
+  - motion
+  - h3_t2v
+  - title_card
+  motion_ratio: 0.6
+  grade: vibrant
+  subtitle_style: clean
+  palette: slate
+  music_mood: light electronic, curious
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

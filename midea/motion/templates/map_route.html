@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+const svg = stage();
+// stylised map: dotted grid "land" + route between normalised points (x,y in 0..1)
+const pts = (P.points || [{ x: .15, y: .6, label: "A" }, { x: .45, y: .35, label: "B" }, { x: .8, y: .55, label: "C" }]).map(p => ({ ...p, X: p.x * W, Y: p.y * H }));
+for (let gx = 0; gx < W; gx += 28 * U) for (let gy = 0; gy < H; gy += 28 * U) {
+  const n = Math.sin(gx * .004) + Math.cos(gy * .006) + Math.sin((gx + gy) * .002);
+  if (n > .4) el("circle", { cx: gx, cy: gy, r: 3 * U, fill: C.muted, opacity: .35 }, svg);
+}
+text(svg, P.title || "", W / 2, H * .1, 50);
+let d = `M ${pts[0].X} ${pts[0].Y}`;
+for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i]; d += ` Q ${(a.X + b.X) / 2} ${Math.min(a.Y, b.Y) - 120 * U} ${b.X} ${b.Y}`; }
+const path = el("path", { d, fill: "none", stroke: C.accent2, "stroke-width": 6 * U, "stroke-dasharray": `${16 * U} ${12 * U}`, "stroke-linecap": "round" }, svg);
+const len = path.getTotalLength();
+const mask = el("path", { d, fill: "none", stroke: C.bg, "stroke-width": 10 * U }, svg);
+mask.setAttribute("stroke-dasharray", len);
+const marks = pts.map(p => { const g = el("g", {}, svg); el("circle", { cx: p.X, cy: p.Y, r: 16 * U, fill: C.accent }, g);
+  el("circle", { cx: p.X, cy: p.Y, r: 30 * U, fill: "none", stroke: C.accent, "stroke-width": 3 * U, class: "ring" }, g);
+  text(g, p.label || "", p.X, p.Y + 60 * U, 34); return g; });
+const mover = el("circle", { r: 12 * U, fill: C.fg, filter: "url(#glow)" }, svg);
+window.render = (t, total) => {
+  const o = outro(t, total, .4), k = ease.inOutSine(prog(t, .4, Math.max(1, total * .65)));
+  mask.setAttribute("stroke-dashoffset", -len * k); path.setAttribute("opacity", o); mask.setAttribute("opacity", o);
+  const p = path.getPointAtLength(len * k); mover.setAttribute("cx", p.x); mover.setAttribute("cy", p.y); mover.setAttribute("opacity", o);
+  marks.forEach((g, i) => { const v = ease.outBack(prog(t, .2 + i * .25, .5)); g.setAttribute("opacity", clamp(v) * o);
+    g.querySelector(".ring").setAttribute("r", (30 + 10 * Math.sin(t * 4 + i)) * U); });
+};
+ready();
+</script></body></html>

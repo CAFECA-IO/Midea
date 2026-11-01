@@ -1,0 +1,28 @@
+name: clip-factory
+title: 長片切短片
+feature: repurpose
+description: 匯入長影片 / Podcast → 轉錄 → Qwen 挑選高光 → 9:16 重構圖 + 卡拉 OK 字幕 → 多支短片。
+defaults:
+  aspect: '9:16'
+  pacing:
+  - 15
+  - 60
+  visual_kinds:
+  - user_media
+  karaoke: true
+  subtitle_style: shorts
+  grade: vibrant
+  music: false
+  delivery: shorts
+stages:
+- ingest
+- transcribe
+- highlights
+- assets
+- edit
+- compose
+- qa
+- publish
+gates:
+- highlights
+- publish

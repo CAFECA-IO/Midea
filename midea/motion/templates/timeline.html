@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+const svg = stage();
+const ev = P.events || [{ date: "1958", label: "感知器" }, { date: "1986", label: "反向傳播" }, { date: "2012", label: "AlexNet" }, { date: "2017", label: "Transformer" }];
+text(svg, P.title || "", W / 2, H * .14, 52);
+const L = W * .08, R = W * .92, Y = H * .55;
+const axis = el("line", { x1: L, y1: Y, y2: Y, stroke: C.muted, "stroke-width": 4 * U, "stroke-linecap": "round" }, svg);
+const items = ev.map((e, i) => {
+  const x = lerp(L + 80 * U, R - 80 * U, ev.length > 1 ? i / (ev.length - 1) : .5), up = i % 2 === 0;
+  const g = el("g", {}, svg);
+  el("line", { x1: x, x2: x, y1: Y, y2: Y + (up ? -110 : 110) * U, stroke: C.accent, "stroke-width": 3 * U }, g);
+  el("circle", { cx: x, cy: Y, r: 14 * U, fill: C.accent }, g);
+  text(g, e.date, x, Y + (up ? -150 : 150) * U, 44, { fill: C.accent2 });
+  text(g, e.label, x, Y + (up ? -200 : 200) * U, 30, { "font-weight": 400 });
+  return { g, x };
+});
+window.render = (t, total) => {
+  const o = outro(t, total, .4), k = ease.inOutCubic(prog(t, .2, Math.max(1, total * .55)));
+  axis.setAttribute("x2", lerp(L, R, k)); axis.setAttribute("opacity", o);
+  items.forEach(it => { const v = ease.outBack(prog(lerp(L, R, k), it.x - 30, 60)); it.g.setAttribute("opacity", clamp(v) * o);
+    it.g.setAttribute("transform", `translate(0 ${(1 - clamp(v)) * 20})`); });
+};
+ready();
+</script></body></html>

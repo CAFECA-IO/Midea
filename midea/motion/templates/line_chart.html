@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+const svg = stage();
+const vals = (P.values || [2, 3, 2.5, 5, 4.2, 7]).map(Number), labels = P.labels || vals.map((_, i) => String(i + 1));
+const mn = Math.min(0, ...vals), mx = Math.max(...vals) * 1.1;
+const L = W * .1, R = W * .92, T = H * .22, B = H * .8;
+text(svg, P.title || "", W / 2, H * .11, 52);
+for (let i = 0; i <= 4; i++) { const y = lerp(B, T, i / 4); el("line", { x1: L, x2: R, y1: y, y2: y, stroke: C.muted, "stroke-opacity": .25, "stroke-width": 1.5 * U }, svg); }
+const pts = vals.map((v, i) => [lerp(L, R, i / Math.max(1, vals.length - 1)), lerp(B, T, (v - mn) / (mx - mn))]);
+labels.forEach((l, i) => text(svg, l, pts[i][0], B + 40 * U, 26, { fill: C.muted, "font-weight": 400 }));
+const d = pts.map((p, i) => (i ? "L" : "M") + p[0] + " " + p[1]).join(" ");
+const area = el("path", { d: d + ` L ${R} ${B} L ${L} ${B} Z`, fill: C.accent, opacity: .12 }, svg);
+const path = el("path", { d, fill: "none", stroke: C.accent, "stroke-width": 7 * U, "stroke-linecap": "round", "stroke-linejoin": "round", filter: "url(#glow)" }, svg);
+const len = path.getTotalLength(); path.setAttribute("stroke-dasharray", len);
+const dot = el("circle", { r: 12 * U, fill: C.accent2 }, svg);
+const lab = text(svg, "", 0, 0, 34, { fill: C.accent2 });
+window.render = (t, total) => {
+  const o = outro(t, total, .4), k = ease.inOutCubic(prog(t, .3, Math.max(1, total * .6)));
+  path.setAttribute("stroke-dashoffset", len * (1 - k)); path.setAttribute("opacity", o); area.setAttribute("opacity", .12 * k * o);
+  const p = path.getPointAtLength(len * k); dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y); dot.setAttribute("opacity", o);
+  const idx = Math.min(vals.length - 1, Math.round(k * (vals.length - 1)));
+  lab.textContent = vals[idx] + (P.unit || ""); lab.setAttribute("x", p.x); lab.setAttribute("y", p.y - 40 * U); lab.setAttribute("opacity", o);
+};
+ready();
+</script></body></html>

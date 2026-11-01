@@ -1,0 +1,11 @@
+# Local model servers (CUDA 12.x). Install into the same venv on the GPU machine.
+# Qwen3.8-Flash-Next is served by llama.cpp's llama-server (see scripts/install_models.sh).
+# MiniMax H3 runs inside ComfyUI (separate checkout, see workflows/README.md).
+# ACE-Step 1.5 runs from its own checkout with uv (scripts/install_models.sh).
+torch>=2.5
+torchaudio>=2.5
+voxcpm                     # VoxCPM2 TTS (openbmb/VoxCPM2)
+diffusers>=0.30            # Stable Audio Open (text→SFX)
+transformers>=4.44
+accelerate>=0.33
+faster-whisper>=1.0        # subtitle alignment + reference transcription

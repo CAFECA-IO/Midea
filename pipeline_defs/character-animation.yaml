@@ -1,0 +1,35 @@
+name: character-animation
+title: SVG 角色綁定動畫
+feature: motion
+description: 骨架綁定的 SVG 角色（idle / wave / walk / talk / point / jump），依旁白音量自動對嘴。可匯入自訂 SVG 骨架。
+defaults:
+  aspect: '16:9'
+  pacing:
+  - 4
+  - 10
+  visual_kinds:
+  - motion
+  motion_templates:
+  - svg_character
+  - kinetic_text
+  lipsync: true
+  grade: neutral
+  subtitle_style: boxed
+  palette: paper
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

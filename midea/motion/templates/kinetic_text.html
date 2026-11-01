@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+const svg = stage();
+const txt = String(P.text || P.title || "Midea");
+const cjk = /[㐀-鿿]/.test(txt);
+const tokens = cjk ? [...txt.replace(/\s+/g, "")] : txt.split(/\s+/);
+const emphasis = new Set((P.emphasis || []).map(String));
+const size = (P.size || (cjk ? 96 : 88));
+const maxW = W * 0.82;
+// greedy line layout using an offscreen canvas for measurement
+const cv = document.createElement("canvas").getContext("2d");
+cv.font = `700 ${size * U}px '${FONT}'`;
+const space = cjk ? 4 * U : cv.measureText(" ").width;
+const lines = [[]]; let lw = 0;
+for (const tk of tokens) {
+  const w = cv.measureText(tk).width;
+  if (lw + w > maxW && lines[lines.length - 1].length) { lines.push([]); lw = 0; }
+  lines[lines.length - 1].push({ tk, w }); lw += w + space;
+}
+const lh = size * U * 1.25, y0 = H / 2 - (lines.length - 1) * lh / 2 + (P.title ? 30 * U : 0);
+const items = [];
+lines.forEach((ln, li) => {
+  const total = ln.reduce((a, b) => a + b.w, 0) + space * (ln.length - 1);
+  let x = W / 2 - total / 2;
+  ln.forEach(({ tk, w }) => {
+    const t = text(svg, tk, x + w / 2, y0 + li * lh, size, { fill: emphasis.has(tk) ? C.accent : C.fg });
+    items.push({ t, x: x + w / 2, y: y0 + li * lh }); x += w + space;
+  });
+});
+const title = P.title && P.text ? text(svg, P.title, W / 2, y0 - lh * 1.1, 34, { fill: C.accent, "font-weight": 500, "letter-spacing": 4 * U }) : null;
+const bar = el("rect", { x: W / 2, y: y0 + (lines.length - .3) * lh, height: 6 * U, width: 0, fill: C.accent, rx: 3 * U }, svg);
+const stag = Math.min(0.08, 1.2 / Math.max(1, items.length));
+window.render = (t, total) => {
+  const o = outro(t, total, .45);
+  items.forEach((it, i) => {
+    const k = ease.outBack(prog(t, .15 + i * stag, .5));
+    it.t.setAttribute("opacity", clamp(k) * o);
+    it.t.setAttribute("transform", `translate(0 ${(1 - k) * 60 * U}) translate(${it.x} ${it.y}) scale(${lerp(.6, 1, clamp(k))}) translate(${-it.x} ${-it.y})`);
+  });
+  if (title) { const k = ease.outCubic(prog(t, 0, .5)); title.setAttribute("opacity", k * o); title.setAttribute("transform", `translate(0 ${(1 - k) * -20})`); }
+  const bk = ease.inOutCubic(prog(t, .3 + items.length * stag, .6)), bw = W * .22 * bk;
+  bar.setAttribute("x", W / 2 - bw / 2); bar.setAttribute("width", bw); bar.setAttribute("opacity", o);
+};
+ready();
+</script></body></html>

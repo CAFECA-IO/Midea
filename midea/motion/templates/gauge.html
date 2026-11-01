@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+// KPI ring gauge (style: docs/style-reference.png — slate background, amber arc, thin tick, light numerals)
+const svg = stage();
+const value = Number(P.value ?? 42), max = Number(P.max ?? 100), unit = P.unit || "";
+const items = P.items || [];
+const cx = items.length ? W * .32 : W / 2, cy = H * .5, R = Math.min(W, H) * .26;
+const C0 = 2 * Math.PI * R, sweep = .78;                        // 280° arc, open at the bottom-left
+el("circle", { cx, cy, r: R, fill: "none", stroke: C.line || "#343a4d", "stroke-width": 10 * U,
+  "stroke-dasharray": `${C0 * sweep} ${C0}`, transform: `rotate(${90 + (1 - sweep) * 180} ${cx} ${cy})`, "stroke-linecap": "round" }, svg);
+const arc = el("circle", { cx, cy, r: R, fill: "none", stroke: C.accent, "stroke-width": 10 * U, "stroke-linecap": "round",
+  transform: `rotate(${90 + (1 - sweep) * 180} ${cx} ${cy})` }, svg);
+const tick = el("line", { stroke: C.fg, "stroke-width": 4 * U, "stroke-linecap": "round" }, svg);
+const num = text(svg, "0", cx, cy - 6 * U, 150, { "font-weight": 300 });
+text(svg, P.label || "", cx, cy + R * .55, 34, { fill: C.muted, "font-weight": 400, "letter-spacing": 2 * U });
+const rows = items.map((it, i) => {
+  const y = H * .3 + i * 120 * U, x = W * .58;
+  const g = el("g", {}, svg);
+  text(g, "• " + it.label, x, y, 30, { "text-anchor": "start", fill: C.fg, "font-weight": 400 });
+  const vt = text(g, "", W * .9, y, 40, { "text-anchor": "end", fill: C.accent, "font-weight": 600 });
+  el("rect", { x, y: y + 30 * U, width: W * .32, height: 6 * U, fill: C.line || "#343a4d", rx: 3 * U }, g);
+  const bar = el("rect", { x, y: y + 30 * U, height: 6 * U, fill: i % 2 ? C.accent2 : C.accent, rx: 3 * U }, g);
+  return { g, vt, bar, v: Number(it.value), m: Number(it.max ?? Math.max(...items.map(x => Number(x.value))) * 1.1) };
+});
+window.render = (t, total) => {
+  const o = outro(t, total, .45), k = ease.outCubic(prog(t, .2, 1.4)), v = value * k;
+  const frac = clamp(v / max) * sweep;
+  arc.setAttribute("stroke-dasharray", `${C0 * frac} ${C0}`); arc.setAttribute("opacity", o);
+  const a = (90 + (1 - sweep) * 180) * Math.PI / 180 + frac * 2 * Math.PI;
+  tick.setAttribute("x1", cx + Math.cos(a) * (R - 22 * U)); tick.setAttribute("y1", cy + Math.sin(a) * (R - 22 * U));
+  tick.setAttribute("x2", cx + Math.cos(a) * (R + 22 * U)); tick.setAttribute("y2", cy + Math.sin(a) * (R + 22 * U)); tick.setAttribute("opacity", o);
+  num.textContent = (Number.isInteger(value) ? Math.round(v) : v.toFixed(1)) + unit; num.setAttribute("opacity", o);
+  rows.forEach((r, i) => { const kk = ease.outCubic(prog(t, .6 + i * .25, .9));
+    r.g.setAttribute("opacity", clamp(kk * 2) * o); r.bar.setAttribute("width", W * .32 * clamp(r.v / r.m) * kk);
+    r.vt.textContent = (Number.isInteger(r.v) ? Math.round(r.v * kk) : (r.v * kk).toFixed(1)); });
+};
+ready();
+</script></body></html>

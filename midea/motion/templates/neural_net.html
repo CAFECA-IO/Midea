@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+const svg = stage();
+const layers = P.layers || [4, 6, 6, 3];
+const names = P.labels || ["輸入層", ...layers.slice(1, -1).map((_, i) => `隱藏層 ${i + 1}`), "輸出層"];
+text(svg, P.title || P.text || "", W / 2, H * .1, 50);
+const L = W * .14, R = W * .86, T = H * .2, B = H * .84;
+const nodes = layers.map((n, li) => [...Array(n)].map((_, j) => ({ x: lerp(L, R, li / (layers.length - 1)), y: lerp(T, B, (j + .5) / n) })));
+const edgeG = el("g", {}, svg), pulseG = el("g", {}, svg), nodeG = el("g", {}, svg);
+const edges = [];
+for (let li = 0; li < layers.length - 1; li++)
+  for (const a of nodes[li]) for (const b of nodes[li + 1]) {
+    const w = Math.sin(a.y * 13.7 + b.y * 7.1) ;   // deterministic pseudo-weight
+    edges.push({ li, a, b, w, line: el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: w > 0 ? C.accent : C.accent2, "stroke-width": (1 + Math.abs(w) * 2.5) * U }, edgeG) });
+  }
+const pulses = edges.filter((_, i) => i % 3 === 0).map(e => ({ e, c: el("circle", { r: 6 * U, fill: C.fg, filter: "url(#glow)" }, pulseG) }));
+const circ = nodes.flat().map(n => ({ n, c: el("circle", { cx: n.x, cy: n.y, r: 22 * U, fill: C.bg2, stroke: C.accent, "stroke-width": 4 * U }, nodeG) }));
+nodes.forEach((ln, li) => text(svg, names[li] || "", ln[0].x, B + 60 * U, 28, { fill: C.muted, "font-weight": 400 }));
+const per = 0.9;   // seconds per layer hop
+window.render = (t, total) => {
+  const o = outro(t, total, .5);
+  circ.forEach(({ n, c }, i) => { const k = ease.outBack(prog(t, .1 + i * .02, .4)); c.setAttribute("r", 22 * U * clamp(k, 0, 1.2) * (1 + .08 * Math.sin(t * 3 + i))); c.setAttribute("opacity", o); });
+  edgeG.setAttribute("transform", `translate(0 ${Math.sin(t * .8) * 4 * U})`); nodeG.setAttribute("transform", `translate(0 ${Math.sin(t * .8) * 4 * U})`); pulseG.setAttribute("transform", `translate(0 ${Math.sin(t * .8) * 4 * U})`);
+  edges.forEach(e => e.line.setAttribute("opacity", (.15 + .25 * ease.outCubic(prog(t, .4 + e.li * .3, .6))) * o));
+  const cyc = (t - .8) / per;
+  pulses.forEach(({ e, c }) => {
+    const k = cyc - e.li;           // which hop is active
+    const frac = k - Math.floor(k), active = k >= 0 && Math.floor(k) % (layers.length) === 0;
+    const kk = ((cyc % (layers.length - 1 + .6)) - e.li);
+    const on = kk >= 0 && kk <= 1;
+    c.setAttribute("cx", lerp(e.a.x, e.b.x, clamp(kk))); c.setAttribute("cy", lerp(e.a.y, e.b.y, clamp(kk)));
+    c.setAttribute("opacity", on && t > .8 ? o : 0);
+  });
+  // nodes light up as the wave passes
+  circ.forEach(({ n, c }) => {
+    const li = layers.findIndex((_, i) => nodes[i].includes(n));
+    const kk = (cyc % (layers.length - 1 + .6)) - li + 1;
+    const lit = t > .8 && kk >= 0.9 && kk <= 1.5;
+    c.setAttribute("fill", lit ? C.accent : C.bg2);
+  });
+};
+ready();
+</script></body></html>

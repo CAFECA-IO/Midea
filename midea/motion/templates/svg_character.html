@@ -1,0 +1,89 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+// ---------------------------------------------------------------------------
+// SVG character rig. A rig is a tree of bones; each bone is an SVG <g> that
+// rotates around its pivot (in parent space). Poses are {bone: degrees}.
+// Custom rigs: pass P.svg containing <g id="bone_name" data-pivot="x,y"> groups
+// with the same bone names; the built-in rig below is used otherwise.
+// ---------------------------------------------------------------------------
+const svg = stage();
+const skin = P.skin || "#f2c9a0", cloth = P.color || C.accent, pants = P.pants || C.bg2, hair = P.hair || "#2b2233";
+const ground = el("rect", { x: 0, y: H * .82, width: W, height: H * .18, fill: C.bg2 }, svg);
+const props = el("g", {}, svg);   // parallax props for walk
+for (let i = 0; i < 12; i++) el("rect", { x: i * 260 * U, y: H * .82 - (60 + (i * 37) % 120) * U, width: 120 * U, height: (60 + (i * 37) % 120) * U, rx: 10 * U, fill: C.muted, opacity: .18 }, props);
+
+const S = 1.25 * U, CX = P.x != null ? P.x * W : W * .38, CY = H * .82;
+const RIG = [ // name, parent, pivot(x,y in rig space), draw(g)
+  ["root", null, [0, -300]],
+  ["leg_l_up", "root", [-22, -300], g => el("rect", { x: -40, y: -300, width: 36, height: 140, rx: 18, fill: pants }, g)],
+  ["leg_l_lo", "leg_l_up", [-22, -165], g => { el("rect", { x: -38, y: -170, width: 32, height: 150, rx: 16, fill: pants }, g); el("ellipse", { cx: -14, cy: -14, rx: 34, ry: 16, fill: hair }, g); }],
+  ["leg_r_up", "root", [22, -300], g => el("rect", { x: 4, y: -300, width: 36, height: 140, rx: 18, fill: pants }, g)],
+  ["leg_r_lo", "leg_r_up", [22, -165], g => { el("rect", { x: 6, y: -170, width: 32, height: 150, rx: 16, fill: pants }, g); el("ellipse", { cx: 30, cy: -14, rx: 34, ry: 16, fill: hair }, g); }],
+  ["torso", "root", [0, -300], g => el("rect", { x: -62, y: -520, width: 124, height: 240, rx: 46, fill: cloth }, g)],
+  ["arm_l_up", "torso", [-58, -495], g => el("rect", { x: -78, y: -505, width: 34, height: 125, rx: 17, fill: cloth }, g)],
+  ["arm_l_lo", "arm_l_up", [-61, -385], g => { el("rect", { x: -76, y: -392, width: 30, height: 115, rx: 15, fill: skin }, g); el("circle", { cx: -61, cy: -272, r: 22, fill: skin }, g); }],
+  ["neck", "torso", [0, -515], g => el("rect", { x: -16, y: -555, width: 32, height: 50, rx: 10, fill: skin }, g)],
+  ["head", "neck", [0, -550], g => {
+    el("circle", { cx: 0, cy: -625, r: 82, fill: skin }, g);
+    el("path", { d: "M -84 -640 Q -70 -730 0 -722 Q 80 -730 86 -640 Q 60 -690 0 -688 Q -50 -690 -84 -640 Z", fill: hair }, g);
+    el("ellipse", { id: "eye_l", cx: -28, cy: -632, rx: 9, ry: 12, fill: "#1b1b28" }, g);
+    el("ellipse", { id: "eye_r", cx: 28, cy: -632, rx: 9, ry: 12, fill: "#1b1b28" }, g);
+    el("ellipse", { id: "mouth", cx: 0, cy: -585, rx: 20, ry: 4, fill: "#7a2a35" }, g);
+    el("circle", { cx: -50, cy: -600, r: 12, fill: "#ff8a8a", opacity: .35 }, g); el("circle", { cx: 50, cy: -600, r: 12, fill: "#ff8a8a", opacity: .35 }, g);
+  }],
+  ["arm_r_up", "torso", [58, -495], g => el("rect", { x: 44, y: -505, width: 34, height: 125, rx: 17, fill: cloth }, g)],
+  ["arm_r_lo", "arm_r_up", [61, -385], g => { el("rect", { x: 46, y: -392, width: 30, height: 115, rx: 15, fill: skin }, g); el("circle", { cx: 61, cy: -272, r: 22, fill: skin }, g); }],
+];
+const holder = el("g", {}, svg);
+const bones = {};
+if (P.svg) {               // custom rig
+  holder.innerHTML = P.svg;
+  holder.querySelectorAll("g[id]").forEach(g => { const pv = (g.getAttribute("data-pivot") || "0,0").split(",").map(Number); bones[g.id] = { g, pivot: pv }; });
+} else {
+  for (const [name, parent, pivot, draw] of RIG) {
+    const g = el("g", { id: name }, parent ? bones[parent].g : holder);
+    if (draw) draw(g);
+    bones[name] = { g, pivot };
+  }
+}
+const mouth = holder.querySelector("#mouth"), eyes = [holder.querySelector("#eye_l"), holder.querySelector("#eye_r")];
+function pose(p, rootDX = 0, rootDY = 0) {
+  holder.setAttribute("transform", `translate(${CX + rootDX * S} ${CY + rootDY * S}) scale(${S})`);
+  for (const [n, b] of Object.entries(bones)) b.g.setAttribute("transform", `rotate(${p[n] || 0} ${b.pivot[0]} ${b.pivot[1]})`);
+}
+const sin = (t, f, ph = 0) => Math.sin(t * f * 2 * Math.PI + ph);
+const ACTIONS = {
+  idle: t => ({ p: { torso: sin(t, .4) * 2, head: sin(t, .3, 1) * 4, arm_l_up: 8 + sin(t, .4) * 3, arm_r_up: -8 - sin(t, .4) * 3, arm_l_lo: 6, arm_r_lo: -6 }, dy: sin(t, .4) * 3 }),
+  wave: t => ({ p: { torso: -3, head: 6 + sin(t, .5) * 3, arm_l_up: 10, arm_l_lo: 6, arm_r_up: -150, arm_r_lo: -25 + sin(t, 2.2) * 28 }, dy: 0 }),
+  walk: t => { const f = 1.1; return { p: { leg_l_up: sin(t, f) * 28, leg_l_lo: Math.max(0, -sin(t, f, .6)) * 35, leg_r_up: -sin(t, f) * 28, leg_r_lo: Math.max(0, sin(t, f, .6)) * 35,
+      arm_l_up: -sin(t, f) * 25, arm_r_up: sin(t, f) * 25, arm_l_lo: 15, arm_r_lo: -15, torso: 4, head: -2 }, dy: -Math.abs(sin(t, f)) * 10, scroll: t * 220 }; },
+  talk: (t, m) => ({ p: { head: sin(t, .7) * 5 + m * 4, torso: sin(t, .35) * 2, arm_r_up: -35 - sin(t, .6) * 15, arm_r_lo: -70 + sin(t, .9) * 20, arm_l_up: 10, arm_l_lo: 8 }, dy: 0 }),
+  point: t => ({ p: { torso: -4, head: -8, arm_r_up: -95 + sin(t, .5) * 3, arm_r_lo: -5, arm_l_up: 12, arm_l_lo: 10 }, dy: 0 }),
+  jump: t => { const k = (t % 1.4) / 1.4, air = Math.max(0, Math.sin(k * Math.PI * 1.3 - .3)); return { p: { arm_l_up: 40 + air * 120, arm_r_up: -40 - air * 120, leg_l_up: -air * 20, leg_r_up: air * 20, leg_l_lo: air * 40, leg_r_lo: air * 40 }, dy: -air * 140 }; },
+};
+let bubble = null, btxt = null;
+if (P.text) {
+  bubble = el("g", {}, svg);
+  const bx = CX + 250 * U, by = H * .2;
+  el("rect", { x: bx, y: by, width: W * .42, height: 190 * U, rx: 30 * U, fill: C.fg }, bubble);
+  el("path", { d: `M ${bx + 40 * U} ${by + 190 * U} l -50 ${60 * U} l 110 ${-60 * U} Z`, fill: C.fg }, bubble);
+  const fo = el("foreignObject", { x: bx + 30 * U, y: by + 20 * U, width: W * .42 - 60 * U, height: 150 * U }, bubble);
+  btxt = document.createElement("div");
+  btxt.style.cssText = `font:700 ${40 * U}px '${FONT}';color:${C.bg};line-height:1.35;display:flex;align-items:center;height:100%`;
+  fo.appendChild(btxt);
+}
+const env = P.mouth || [];
+const action = ACTIONS[P.action] ? P.action : (P.text ? "talk" : "wave");
+window.render = (t, total) => {
+  const fps = env.length ? env.length / total : 24, m = env.length ? env[Math.min(env.length - 1, Math.floor(t * fps))] : (action === "talk" ? Math.abs(sin(t, 4.5)) * (sin(t, .5) > -0.6 ? 1 : 0) : 0);
+  const a = ACTIONS[action](t, m);
+  pose(a.p, 0, a.dy);
+  if (a.scroll != null) props.setAttribute("transform", `translate(${-(a.scroll * U) % (260 * U * 6)} 0)`);
+  if (mouth) { mouth.setAttribute("ry", 4 + m * 18); mouth.setAttribute("rx", 20 - m * 4); }
+  const blink = (t % 3.2) > 3.05; eyes.forEach(e => e && e.setAttribute("ry", blink ? 1.5 : 12));
+  const o = outro(t, total, .4); holder.setAttribute("opacity", ease.outCubic(prog(t, 0, .4)) * o);
+  if (bubble) { const k = ease.outBack(prog(t, .4, .5)); bubble.setAttribute("opacity", clamp(k) * o);
+    const s = String(P.text); btxt.textContent = s.slice(0, Math.floor(s.length * prog(t, .6, Math.min(total * .6, s.length * .07)))); }
+};
+ready();
+</script></body></html>

@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+const svg = stage();
+const vals = (P.values || [3, 5, 2, 7, 4]).map(Number), labels = P.labels || vals.map((_, i) => String.fromCharCode(65 + i));
+const unit = P.unit || "", max = Math.max(...vals) * 1.15 || 1;
+const L = W * .12, R = W * .9, T = H * .22, B = H * .82;
+text(svg, P.title || "", W / 2, H * .11, 52);
+el("line", { x1: L, x2: R, y1: B, y2: B, stroke: C.muted, "stroke-width": 2 * U }, svg);
+const bw = (R - L) / vals.length * .62;
+const bars = vals.map((v, i) => {
+  const cx = L + (R - L) * (i + .5) / vals.length;
+  const r = el("rect", { x: cx - bw / 2, width: bw, rx: 8 * U, fill: i === vals.indexOf(Math.max(...vals)) ? C.accent : C.accent2 }, svg);
+  const lab = text(svg, labels[i] || "", cx, B + 40 * U, 30, { fill: C.muted, "font-weight": 400 });
+  const num = text(svg, "", cx, 0, 34);
+  return { r, num, v, cx };
+});
+window.render = (t, total) => {
+  const o = outro(t, total, .4);
+  bars.forEach((b, i) => {
+    const k = ease.outCubic(prog(t, .3 + i * .15, 1.0)), h = (B - T) * b.v / max * k;
+    b.r.setAttribute("y", B - h); b.r.setAttribute("height", h); b.r.setAttribute("opacity", o);
+    const val = b.v * k; b.num.textContent = (Number.isInteger(b.v) ? Math.round(val) : val.toFixed(1)) + unit;
+    b.num.setAttribute("y", B - h - 30 * U); b.num.setAttribute("opacity", clamp(k * 3) * o);
+  });
+};
+ready();
+</script></body></html>

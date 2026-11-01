@@ -1,0 +1,146 @@
+# Midea — local-GPU video studio configuration
+# 目標硬體：單張 24–48GB NVIDIA GPU + 大容量系統記憶體（建議 ≥128GB）。
+# 重量級模型以「獨佔 GPU 租約」輪流載入，輕量模型可共存。
+
+workspace: ./projects            # 每個專案一個資料夾（checkpoint、素材、成片）
+mode: local                      # local = 真實模型；mock = 無 GPU 的乾跑（測試/展示用）
+
+gpu:
+  device: 0
+  vram_gb: 48                    # 你的顯卡 VRAM（24 或 48）
+  reserve_gb: 1.5                # 給驅動/桌面保留
+  swap_policy: lru               # 需要 VRAM 時，依最久未用順序停止服務
+  idle_unload_s: 600             # 服務閒置多久自動卸載
+  power_watts: 450               # 用於估算電費
+  electricity_per_kwh: 4.5       # 電價（TWD/kWh）
+  currency: TWD
+
+# ---- 本地模型服務 --------------------------------------------------------
+# 每個服務 = 一個可啟動/停止的子行程 + 健康檢查 URL。
+# Midea 只在需要時啟動，用完依 swap_policy 釋放 VRAM。
+services:
+  qwen:                          # 腳本、分鏡、審稿、視覺理解（多模態）
+    kind: llm
+    model: Qwen3.8-Flash-Next
+    base_url: http://127.0.0.1:8080/v1
+    health: http://127.0.0.1:8080/health
+    vram_gb: 22                  # MoE 專家層放 CPU（--n-cpu-moe），GPU 只放注意力/共享層
+    exclusive: false
+    start: >-
+      llama-server -hf unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL
+      --host 127.0.0.1 --port 8080 -c 65536 -ngl 999 --n-cpu-moe 40
+      --jinja --chat-template-kwargs '{"reasoning_effort":"low"}'
+      --temp 0.7 --top-p 0.8 --top-k 20 --presence-penalty 1.5
+    sampling: {temperature: 0.7, top_p: 0.8, top_k: 20, presence_penalty: 1.5}
+    startup_timeout_s: 900
+
+  h3:                            # 影片生成（T2V / I2V / 首尾幀 / 參考圖），含原生音訊
+    kind: video
+    model: MiniMax-H3 (FL2VA pruned INT8)
+    base_url: http://127.0.0.1:8188
+    health: http://127.0.0.1:8188/system_stats
+    vram_gb: 46
+    exclusive: true              # 需要整張卡；其他服務會先被卸載
+    start: >-
+      python main.py --listen 127.0.0.1 --port 8188 --lowvram --reserve-vram 1.5
+    cwd: ~/ComfyUI
+    workflows:                   # 從 ComfyUI「Export (API)」匯出，內含 {{PLACEHOLDER}}
+      t2v: workflows/h3_t2v_api.json
+      i2v: workflows/h3_i2v_api.json
+      r2v: workflows/h3_r2v_api.json
+    defaults: {width: 1344, height: 768, fps: 24, steps: 30, max_seconds: 15}
+    startup_timeout_s: 600
+    # 注意：MiniMax H3 Community License 不涵蓋美國/歐盟/英國/南韓，商用年營收 ≥ 2,000 萬美元需另行授權。
+
+  voxcpm:                        # 旁白 TTS、聲音設計、聲音複製（48kHz）
+    kind: tts
+    model: openbmb/VoxCPM2
+    base_url: http://127.0.0.1:8090
+    health: http://127.0.0.1:8090/health
+    vram_gb: 8
+    exclusive: false
+    start: python -m midea.servers.voxcpm_server --port 8090
+    defaults: {cfg_value: 2.0, inference_timesteps: 10, voice: "(warm, clear documentary narrator)"}
+    startup_timeout_s: 300
+
+  acestep:                       # 背景音樂（含/不含人聲，10s–10min），MIT 授權
+    kind: music
+    model: ACE-Step 1.5 (acestep-v15-turbo)
+    base_url: http://127.0.0.1:8001
+    health: http://127.0.0.1:8001/health
+    vram_gb: 6
+    exclusive: false
+    start: uv run acestep-api
+    cwd: ~/ACE-Step-1.5
+    defaults: {inference_steps: 8, audio_format: wav, batch_size: 1}
+    startup_timeout_s: 300
+
+  foley:                         # 影片→音效（依畫面自動配 Foley，48kHz）
+    kind: sfx_v2a
+    model: tencent/HunyuanVideo-Foley
+    base_url: http://127.0.0.1:8092
+    health: http://127.0.0.1:8092/health
+    vram_gb: 20
+    exclusive: false
+    start: python -m midea.servers.foley_server --port 8092 --repo ~/HunyuanVideo-Foley --weights ~/models/HunyuanVideo-Foley
+    startup_timeout_s: 600
+
+  sfx:                           # 文字→音效（轉場 whoosh、環境音、UI 音）
+    kind: sfx_t2a
+    model: stabilityai/stable-audio-open-1.0
+    base_url: http://127.0.0.1:8093
+    health: http://127.0.0.1:8093/health
+    vram_gb: 6
+    exclusive: false
+    start: python -m midea.servers.sfx_server --port 8093
+    startup_timeout_s: 300
+
+  whisper:                       # 字幕對齊 / 參考影片轉錄（faster-whisper large-v3）
+    kind: asr
+    model: large-v3
+    in_process: true
+    vram_gb: 4
+
+# ---- 開放/免費素材庫 ------------------------------------------------------
+stock:
+  sources: [archive_org, nasa, wikimedia, pexels, pixabay]
+  license_allow: [public-domain, cc0, cc-by, cc-by-sa, pexels, pixabay, nasa]
+  min_height: 720
+  cache_dir: ./.cache/stock
+
+# ---- 成本與審核 ----------------------------------------------------------
+budget:
+  mode: warn                     # observe | warn | cap
+  total_cap: 300                 # 以 currency 計（本地電費 + 任何付費 API）
+  approval_threshold: 20         # 單一動作超過此金額需人工核准
+
+# 各 pipeline 的核准節點定義在 pipeline_defs/*.yaml；在此列出要「略過」的節點
+gates_disabled: []               # 例如 [proposal, script] 讓 AI 自動通過前期企劃
+auto_approve_below: 0            # 預估花費低於此值時自動通過 assets 關卡（0 = 永遠人工核准）
+
+qa:
+  loudness_lufs: -14             # 社群平台；廣播用 -23
+  true_peak_db: -1.0
+  lra_max: 11
+  black_frame_ratio_max: 0.02
+  freeze_max_s: 2.5
+  subtitle_max_cps: 17           # 每秒字數上限（中文建議 7–9 字/秒，見 qa.subtitle_max_cps_cjk）
+  subtitle_max_cps_cjk: 9
+  subtitle_max_chars_line: 42
+  subtitle_max_chars_line_cjk: 18
+  subtitle_sync_tolerance_ms: 250
+
+render:
+  mock_half_res: true           # mock 模式以半解析度快速渲染
+  default_aspect: "16:9"
+  fps: 24
+  crf: 18
+  preset: medium
+  video_codec: libx264
+  audio_codec: aac
+  audio_bitrate: 192k
+  pix_fmt: yuv420p
+
+server:
+  host: 127.0.0.1
+  port: 7788

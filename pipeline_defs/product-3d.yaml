@@ -1,0 +1,38 @@
+name: product-3d
+title: 3D 產品展示
+feature: motion
+description: three.js 轉台展示（可載入 .glb），棚燈、陰影、規格標註，可搭配 H3 參考圖生成情境鏡頭。
+defaults:
+  aspect: '16:9'
+  pacing:
+  - 4
+  - 8
+  visual_kinds:
+  - motion
+  - h3_r2v
+  - title_card
+  motion_templates:
+  - product_turntable
+  - kinetic_text
+  - bar_chart
+  grade: neutral
+  subtitle_style: clean
+  palette: slate
+  music_mood: sleek minimal tech
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

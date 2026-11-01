@@ -1,0 +1,22 @@
+name: localization-dub
+title: 在地化配音
+feature: repurpose
+description: 匯入影片 → 轉錄 → Qwen 翻譯並對齊時長 → VoxCPM2 聲音複製配音 → 雙語字幕。
+defaults:
+  aspect: keep
+  visual_kinds:
+  - user_media
+  subtitle_style: clean
+  music: false
+  voice_clone: true
+stages:
+- ingest
+- transcribe
+- translate
+- voice
+- compose
+- qa
+- publish
+gates:
+- translate
+- publish

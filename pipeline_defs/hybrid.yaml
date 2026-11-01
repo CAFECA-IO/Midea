@@ -1,0 +1,35 @@
+name: hybrid
+title: 一鍵成片（混合）
+feature: text-to-video
+description: 自動判斷每一鏡用 H3 生成、真實素材或動態圖形，追求最佳成片品質。
+defaults:
+  aspect: '16:9'
+  pacing:
+  - 3
+  - 8
+  visual_kinds:
+  - h3_t2v
+  - h3_i2v
+  - stock_video
+  - motion
+  - title_card
+  grade: neutral
+  subtitle_style: clean
+  palette: slate
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

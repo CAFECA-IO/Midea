@@ -1,0 +1,41 @@
+name: archival-history
+title: 歷史檔案紀錄片
+feature: real-footage
+description: 以公有領域歷史影像為主，加上膠片顆粒、去交錯、穩定化與歷史質感調色，時間軸動畫串場。
+defaults:
+  aspect: '16:9'
+  pacing:
+  - 5
+  - 12
+  visual_kinds:
+  - stock_video
+  - stock_image
+  - title_card
+  real_only: true
+  sources:
+  - archive_org
+  - nasa
+  - wikimedia
+  grade: archival
+  old_film: true
+  deinterlace: true
+  subtitle_style: documentary
+  credits: true
+  music_mood: melancholic solo piano, 1940s newsreel feel
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

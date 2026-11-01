@@ -1,0 +1,35 @@
+name: documentary-montage
+title: 真實素材紀錄片
+feature: real-footage
+description: 僅使用真實素材（Archive.org / NASA / Wikimedia / Pexels / Pixabay），自動檢索、排序、授權過濾、Ken Burns 與片尾出處。
+defaults:
+  aspect: '16:9'
+  pacing:
+  - 4
+  - 10
+  visual_kinds:
+  - stock_video
+  - stock_image
+  - title_card
+  real_only: true
+  grade: documentary
+  subtitle_style: documentary
+  credits: true
+  music_mood: documentary piano, warm strings
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midea Studio</title>
+<style>
+:root{--bg:#1a1e29;--panel:#20253331;--panel:#212636;--panel2:#272d3f;--line:#343a4d;--fg:#eef0f6;--muted:#7d849a;--accent:#f5a524;--accent2:#8b90c8;--ok:#3fb984;--warn:#f5a524;--bad:#e5534b;--r:4px}
+:root{color-scheme:dark}a{color:var(--accent);text-decoration:none}*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Noto Sans TC","PingFang TC",sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:#1a1e29;font-weight:600}
+button.danger{border-color:var(--bad);color:var(--bad)}button:disabled{opacity:.4;cursor:not-allowed}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%}
+textarea{resize:vertical}label{display:block;color:var(--muted);font-size:12px;margin:10px 0 4px}
+.app{display:grid;grid-template-columns:340px 1fr;height:100vh}
+aside{border-right:1px solid var(--line);overflow:auto;padding:16px;background:var(--panel)}
+main{overflow:auto;padding:20px 24px 80px}
+h1{font-size:18px;margin:0 0 12px;display:flex;align-items:center;gap:8px}h1 small{color:var(--muted);font-weight:400;font-size:12px}
+h2{font-size:14px;font-weight:500;margin:22px 0 10px;display:flex;align-items:center;gap:8px}h2::before{content:'';width:3px;height:13px;background:var(--accent);display:inline-block}h3{font-size:12px;margin:0 0 8px;color:var(--fg);font-weight:500;letter-spacing:.04em;display:flex;align-items:center;gap:8px}h3::before{content:'';width:3px;height:12px;background:var(--accent);display:inline-block}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.chk{display:flex;gap:6px;align-items:center;margin-top:8px;color:var(--fg);font-size:13px}.chk input{width:auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.plist{margin-top:16px;display:flex;flex-direction:column;gap:6px}
+.pitem{padding:8px 10px;border-radius:8px;border:1px solid transparent;cursor:pointer}.pitem:hover{background:var(--panel2)}.pitem.on{border-color:var(--accent);background:var(--panel2)}
+.pitem .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pitem .m{color:var(--muted);font-size:12px}
+.badge{display:inline-block;padding:1px 8px;border-radius:2px;font-size:11px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+.b-pass,.b-done,.b-approved{color:var(--ok);border-color:var(--ok)}.b-warn,.b-awaiting,.b-awaiting_approval,.b-review{color:var(--warn);border-color:var(--warn)}
+.b-fail,.b-failed,.b-rejected,.b-qa_failed{color:var(--bad);border-color:var(--bad)}.b-running{color:var(--accent);border-color:var(--accent)}
+.stages{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 16px}.stage{padding:4px 10px;border-radius:99px;border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.stage{border-radius:2px;background:var(--panel)}.stage.done{color:var(--fg);border-color:var(--accent2);background:#8b90c822}.stage.cur{color:#1a1e29;background:var(--accent);border-color:var(--accent)}.stage.gate::after{content:" ◆";color:var(--warn)}
+.gatebar{position:sticky;top:0;z-index:5;background:#2a2a2a;background:linear-gradient(90deg,#3b3020,#262b3a);border:1px solid #f5a52466;border-left:3px solid var(--accent);border-radius:var(--r);padding:12px 14px;margin-bottom:16px}
+.gatebar .row{flex-wrap:wrap}.gatebar textarea{min-height:38px;height:38px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.scene{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.scene .media{aspect-ratio:16/9;background:#000;display:flex;align-items:center;justify-content:center;color:var(--muted);position:relative}
+.scene{border-radius:4px}.scene .media img,.scene .media video{width:100%;height:100%;object-fit:contain}
+.scene .media .k{position:absolute;left:8px;top:8px}.scene .media .d{position:absolute;right:8px;top:8px}
+.scene .body{padding:10px 12px;display:flex;flex-direction:column;gap:6px;flex:1}
+.scene .nar{font-size:13px}.scene .vis{font-size:12px;color:var(--muted);word-break:break-word}
+.scene.sel{outline:2px solid var(--warn)}.scene textarea{font-size:12px;min-height:54px}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:4px 12px;font-size:13px}.kv div:nth-child(odd){color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}th{color:var(--muted);font-weight:500}
+.cost{display:flex;gap:22px;flex-wrap:nowrap;align-items:center}.cost .n{font-size:26px;font-weight:300;letter-spacing:.02em}.cost .n .amber{color:var(--accent)}.cost .l{color:var(--muted);font-size:12px}
+.log{font:12px/1.5 ui-monospace,Menlo,monospace;color:var(--muted);max-height:220px;overflow:auto;background:var(--bg);border-radius:8px;padding:8px;border:1px solid var(--line)}
+.vram{height:6px;background:var(--line);overflow:hidden}.vram i{display:block;height:100%;background:var(--accent)}
+.svc{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--muted)}.svc b{color:var(--fg);font-weight:500}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#444;margin-right:6px}.dot.on{background:var(--ok)}
+pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;background:var(--bg);padding:10px;border-radius:8px;border:1px solid var(--line);max-height:420px;overflow:auto}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:18px 0 12px}.tab{padding:8px 12px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}.tab.on{color:var(--fg);border-color:var(--accent)}.ring{display:flex;align-items:center;gap:10px}.ring svg{flex:0 0 auto}
+.empty{color:var(--muted);text-align:center;padding:80px 20px}
+.alts{display:flex;gap:4px;flex-wrap:wrap}.alts button{font-size:11px;padding:2px 6px}
+@media (max-width:900px){.app{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <h1>Midea Studio <small id="mode"></small></h1>
+  <div class="card">
+    <h3>新影片</h3>
+    <label>一句話描述</label>
+    <textarea id="f-prompt" rows="3" placeholder="製作一支 60 秒解釋神經網路的動畫"></textarea>
+    <div class="row">
+      <div><label>製作管線</label><select id="f-pipe"><option value="auto">自動判斷</option></select></div>
+      <div style="flex:.6"><label>秒數</label><input id="f-dur" type="number" value="60" min="5" max="600"></div>
+    </div>
+    <div class="row">
+      <div><label>畫面比例</label><select id="f-aspect"><option value="">依管線</option><option>16:9</option><option>9:16</option><option>1:1</option><option>4:5</option><option>21:9</option></select></div>
+      <div><label>語言</label><select id="f-lang"><option value="zh-TW">繁中</option><option value="zh-CN">简中</option><option value="en">English</option><option value="ja">日本語</option></select></div>
+    </div>
+    <label>參考影片（Shorts / Reels / TikTok）</label>
+    <input id="f-ref" placeholder="https://youtube.com/shorts/…">
+    <label>旁白聲音（VoxCPM2 聲音設計描述）</label>
+    <input id="f-voice" placeholder="(warm, clear documentary narrator)">
+    <label>自有素材（長片、配音來源、產品參考圖）</label>
+    <input id="f-media" type="file" multiple>
+    <label class="chk"><input type="checkbox" id="f-real"> 僅使用真實素材（Archive.org / NASA / Wikimedia / Pexels）</label>
+    <label class="chk"><input type="checkbox" id="f-music" checked> 背景音樂（ACE-Step）</label>
+    <label class="chk"><input type="checkbox" id="f-subs" checked> 字幕壓製</label>
+    <label class="chk"><input type="checkbox" id="f-auto"> 自動通過所有關卡（不建議）</label>
+    <div style="margin-top:12px"><button class="primary" id="f-go" style="width:100%">開始製作</button></div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <h3>GPU</h3>
+    <div id="gpu"></div>
+  </div>
+  <div class="plist" id="plist"></div>
+</aside>
+<main id="main"><div class="empty">選擇左側專案，或輸入一句話開始製作。<br><br><span id="toolcount"></span></div></main>
+</div>
+<script>
+const $ = s => document.querySelector(s), esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const api = async (u, o = {}) => { const r = await fetch(u, { headers: { "Content-Type": "application/json" }, ...o }); if (!r.ok) throw new Error(await r.text()); return r.json(); };
+let META = {}, CUR = null, DATA = null, ES = null, TAB = "board", SEL = new Set(), REGEN = {};
+const STAGE_ZH = { reference_analysis: "參考分析", proposal: "企劃", script: "腳本", scene_plan: "分鏡", voice: "旁白", assets: "素材生成", music_sfx: "音樂音效", edit: "剪輯", compose: "合成字幕", qa: "自我審核", publish: "發佈", ingest: "匯入", transcribe: "轉錄", highlights: "高光", translate: "翻譯" };
+const KIND_ZH = { h3_t2v: "H3 生成", h3_i2v: "H3 圖生影", h3_r2v: "H3 參考", stock_video: "真實影片", stock_image: "真實照片", motion: "動態圖形", title_card: "標題卡", user_media: "自有素材" };
+const fileUrl = p => `/files/${CUR}/${p}`.replace(/#/g, "%23");
+
+async function init() {
+  META = await api("/api/meta");
+  $("#mode").textContent = META.mode === "mock" ? "MOCK（無 GPU 示範）" : "LOCAL GPU";
+  $("#toolcount").textContent = `${Object.keys(META.pipelines).length} 條製作管線 · ${META.tools} 種工具`;
+  for (const [k, p] of Object.entries(META.pipelines)) $("#f-pipe").insertAdjacentHTML("beforeend", `<option value="${k}">${esc(p.title)}</option>`);
+  $("#f-go").onclick = create;
+  refreshList(); refreshGpu(); setInterval(refreshGpu, 5000); setInterval(refreshList, 8000);
+  const h = location.hash.slice(1); if (h) open(h);
+}
+async function refreshList() {
+  const ps = await api("/api/projects");
+  $("#plist").innerHTML = ps.map(p => `<div class="pitem ${p.id === CUR ? "on" : ""}" onclick="open('${p.id}')"><div class="t">${esc(p.title || p.id)}</div>
+    <div class="m"><span class="badge b-${p.status}">${p.status}</span> ${esc(META.pipelines[p.pipeline]?.title || p.pipeline)} · ${esc(STAGE_ZH[p.stage] || p.stage || "")}</div></div>`).join("");
+}
+async function refreshGpu() {
+  try {
+    const g = await api("/api/gpu"); const pct = Math.min(100, g.resident_gb / g.budget_gb * 100);
+    const dev = g.gpus[0] ? `${esc(g.gpus[0].name)} · ${(g.gpus[0].used_mb / 1024).toFixed(1)}/${(g.gpus[0].total_mb / 1024).toFixed(0)} GB · ${g.gpus[0].util}%` : "未偵測到 nvidia-smi";
+    $("#gpu").innerHTML = `<div class="svc"><span>${dev}</span></div><div class="vram"><i style="width:${pct}%"></i></div>
+      <div class="svc"><span>Midea 配置 ${g.resident_gb.toFixed(1)} / ${g.budget_gb.toFixed(1)} GB</span></div>` +
+      Object.entries(g.services).map(([n, s]) => `<div class="svc"><span><span class="dot ${s.running ? "on" : ""}"></span><b>${n}</b> ${esc(s.model || "")}</span>
+      <span>${s.vram_gb}GB${s.exclusive ? " ⓧ" : ""} <a href="#" onclick="svc('${n}','${s.running ? "stop" : "start"}');return false">${s.running ? "停止" : "啟動"}</a></span></div>`).join("");
+  } catch (e) {}
+}
+async function svc(n, a) { await api(`/api/services/${n}/${a}`, { method: "POST" }); refreshGpu(); }
+async function create() {
+  const prompt = $("#f-prompt").value.trim(); if (!prompt) return $("#f-prompt").focus();
+  $("#f-go").disabled = true;
+  try {
+    const media = [];
+    for (const f of $("#f-media").files) { const fd = new FormData(); fd.append("file", f); media.push((await (await fetch("/api/upload", { method: "POST", body: fd })).json()).path); }
+    const body = { prompt, pipeline: $("#f-pipe").value, duration_s: +$("#f-dur").value, aspect: $("#f-aspect").value || null, language: $("#f-lang").value,
+      real_only: $("#f-real").checked, reference_url: $("#f-ref").value.trim() || null, user_media: media, voice: $("#f-voice").value.trim() || null,
+      music: $("#f-music").checked, subtitles: $("#f-subs").checked, auto_approve: $("#f-auto").checked };
+    const r = await api("/api/projects", { method: "POST", body: JSON.stringify(body) });
+    await refreshList(); open(r.id);
+  } catch (e) { alert(e.message); } finally { $("#f-go").disabled = false; }
+}
+async function open(id) {
+  if (CUR !== id) { SEL.clear(); REGEN = {}; }
+  CUR = id; location.hash = id; refreshList();
+  if (ES) ES.close();
+  ES = new EventSource(`/api/events/${id}`);
+  let t = null; ES.onmessage = ev => { const e = JSON.parse(ev.data); clearTimeout(t); t = setTimeout(load, e.kind === "progress" ? 600 : 150); };
+  load();
+}
+async function load() { if (!CUR) return; DATA = await api(`/api/projects/${CUR}`); render(); }
+
+function ring(v, max, label, sub, color) {
+  const R = 22, C = 2 * Math.PI * R, sw = .78, f = Math.max(0, Math.min(1, max ? v / max : 0)) * sw, rot = 90 + (1 - sw) * 180;
+  return `<div class="ring"><svg width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="${R}" fill="none" stroke="#343a4d" stroke-width="3" stroke-dasharray="${C * sw} ${C}" stroke-linecap="round" transform="rotate(${rot} 28 28)"/>
+    <circle cx="28" cy="28" r="${R}" fill="none" stroke="${color || "var(--accent)"}" stroke-width="3" stroke-dasharray="${C * f} ${C}" stroke-linecap="round" transform="rotate(${rot} 28 28)"/>
+    <text x="28" y="32" text-anchor="middle" fill="#eef0f6" font-size="12" font-weight="300">${Math.round(max ? v / max * 100 : 0)}%</text></svg>
+    <div><div class="n">${label}</div><div class="l">${sub}</div></div></div>`;
+}
+function render() {
+  const d = DATA, cur = META.currency || "";
+  const awaiting = Object.entries(d.gates || {}).find(([, g]) => g.status === "awaiting");
+  const est = d.data.scene_plan?._estimate;
+  const stages = d.stages_order.map(s => { const st = d.stages[s]?.status; const cls = st === "done" ? "done" : (d.stage === s ? "cur" : "");
+    return `<span class="stage ${cls} ${d.gates_order.includes(s) ? "gate" : ""}">${STAGE_ZH[s] || s}</span>`; }).join("");
+  let h = `<div class="row" style="align-items:flex-start"><div style="flex:3"><h1 style="margin:0">${esc(d.data.proposal?.title || d.brief.prompt)}</h1>
+    <div class="m" style="color:var(--muted)">${esc(META.pipelines[d.pipeline]?.title || d.pipeline)} · ${esc(d.id)} · <span class="badge b-${d.status}">${d.status}</span>
+    ${d.running ? "" : (["done"].includes(d.status) ? "" : `<button onclick="resume()" style="margin-left:8px">繼續執行</button>`)}</div></div>
+    <div class="cost" style="flex:2;justify-content:flex-end">${ring(d.cost.estimated || 0, META.budget?.total_cap || 1, (d.cost.estimated || 0).toFixed(2), `預估 ${cur} / 上限 ${META.budget?.total_cap ?? "—"}`)}
+    ${ring(d.cost.actual || 0, d.cost.estimated || 1, `<span class="amber">${(d.cost.actual || 0).toFixed(2)}</span>`, `實際 ${cur}`, "#8b90c8")}
+    ${est ? `<div><div class="n">${est.wall_minutes}<small style="font-size:12px;color:var(--muted)"> 分</small></div><div class="l">預估時間 · GPU ${est.gpu_minutes} 分</div></div>` : ""}</div></div>
+    <div class="stages">${stages}</div>`;
+  if (awaiting) h += gatePanel(awaiting[0], awaiting[1]);
+  const err = [...(d.events || [])].reverse().find(e => e.kind === "error");
+  if (err && ["failed", "qa_failed"].includes(d.status)) h += `<div class="card" style="border-color:var(--bad);margin-bottom:12px"><b style="color:var(--bad)">錯誤</b> ${esc(err.message)}</div>`;
+  const tabs = { board: "分鏡看板", plan: "企劃 / 腳本", qa: "自我審核", final: "成片", log: "紀錄" };
+  h += `<div class="tabs">${Object.entries(tabs).map(([k, v]) => `<div class="tab ${TAB === k ? "on" : ""}" onclick="TAB='${k}';render()">${v}</div>`).join("")}</div>`;
+  h += ({ board: boardTab, plan: planTab, qa: qaTab, final: finalTab, log: logTab })[TAB]();
+  $("#main").innerHTML = h;
+}
+function gatePanel(gate, g) {
+  const hint = { proposal: "確認主題、受眾、風格與管線", script: "確認旁白腳本（可直接編修 JSON）", scene_plan: "確認分鏡、每鏡素材類型與預估花費後才會動用 GPU 生成",
+    assets: "逐鏡檢查生成畫面與真實素材，勾選要重做的鏡頭；核准後才進行最終剪輯渲染", publish: "成片已完成自我審核（結果見「自我審核」分頁），確認後輸出", reference_analysis: "確認從參考影片抽取的節奏與結構",
+    highlights: "確認要剪成短片的片段", translate: "確認翻譯稿" }[gate] || "";
+  const qaFail = gate === "publish" && DATA.data.qa?.status === "fail";
+  const b = g.summary?.budget;
+  return `<div class="gatebar"><div class="row" style="justify-content:space-between"><div><b>◆ 等待核准：${STAGE_ZH[gate] || gate}</b> <span style="color:var(--muted)">${hint}</span>
+    ${b ? `<div style="margin-top:4px;color:${b.over ? "var(--bad)" : "var(--muted)"}">${esc(b.message)}</div>` : ""}
+    ${qaFail ? `<div style="color:var(--bad)">QA 未通過 — 核准即代表你明確覆核此成片</div>` : ""}</div></div>
+    <div class="row" style="margin-top:8px"><textarea id="g-note" placeholder="修改意見（駁回時會回饋給 AI 重新製作）"></textarea>
+    <div style="flex:0 0 auto;display:flex;gap:6px">${gate === "assets" ? `<button onclick="regen()" ${SEL.size ? "" : "disabled"}>重做選取的 ${SEL.size} 鏡</button>` : ""}
+    <button class="danger" onclick="decide('${gate}',false)">駁回重做</button><button class="primary" onclick="decide('${gate}',true)">核准</button></div></div></div>`;
+}
+async function decide(gate, ok, edits) {
+  const note = $("#g-note")?.value || "";
+  let e = edits || null;
+  if (ok && ["proposal", "script", "scene_plan", "translate", "highlights"].includes(gate)) {
+    const ta = $("#json-edit"); if (ta && ta.dataset.gate === gate && ta.dataset.dirty) { try { e = { data: JSON.parse(ta.value) }; } catch (x) { return alert("JSON 格式錯誤：" + x.message); } }
+  }
+  await api(`/api/projects/${CUR}/gates/${gate}`, { method: "POST", body: JSON.stringify({ approved: ok, note, edits: e }) });
+  SEL.clear(); REGEN = {}; setTimeout(load, 300);
+}
+async function regen() {
+  const r = {}; for (const id of SEL) r[id] = REGEN[id] || {};
+  await decide("assets", false, { regenerate: r });
+}
+async function resume() { await api(`/api/projects/${CUR}/resume`, { method: "POST" }); setTimeout(load, 400); }
+
+function boardTab() {
+  const d = DATA, plan = d.data.scene_plan, assets = d.data.assets?.scenes || {}, voice = d.data.voice?.clips || {};
+  const atAssets = d.gates?.assets?.status === "awaiting";
+  if (d.data.highlights?.clips && !plan) return clipBoard();
+  if (!plan) return `<div class="empty">${d.status === "awaiting_approval" ? "請先核准上方關卡" : "AI 正在規劃分鏡…"}</div>`;
+  const total = plan.scenes.reduce((a, s) => a + s.duration_s, 0);
+  let h = `<div style="color:var(--muted);margin-bottom:10px">${plan.scenes.length} 鏡 · ${total.toFixed(1)} 秒 · 音樂：${esc(plan.music?.prompt || "—")}</div><div class="grid">`;
+  for (const s of plan.scenes) {
+    const a = assets[s.id], v = s.visual || {}, sel = SEL.has(s.id);
+    const media = a?.file ? `<img src="${fileUrl(a.thumb)}?v=${encodeURIComponent(a.duration)}" style="cursor:pointer" title="播放" onclick="this.outerHTML='<video src=&quot;${fileUrl(a.file)}&quot; controls autoplay></video>'">` :
+      (a?.thumb ? `<img src="${fileUrl(a.thumb)}">` : `<span>${d.stage === "assets" ? "生成中…" : "尚未生成"}</span>`);
+    const desc = v.kind?.startsWith("stock") ? `🔎 ${esc(v.query)}` : v.kind === "motion" ? `✦ ${esc(v.template)}` : esc(v.prompt);
+    const alts = (a?.alternatives || []).slice(0, 6).map(c => `<button title="${esc(c.title)} (${esc(c.license)})" onclick="pickAlt('${s.id}','${esc(c.id)}')">${esc(c.source)}${a.source?.id === c.id ? " ✓" : ""}</button>`).join("");
+    h += `<div class="scene ${sel ? "sel" : ""}"><div class="media">${media}<span class="badge k">${KIND_ZH[v.kind] || v.kind}</span><span class="badge d">${s.duration_s.toFixed(1)}s</span></div>
+      <div class="body"><div class="row" style="justify-content:space-between"><b>${s.id}</b>${voice[s.id] ? `<audio src="${fileUrl(voice[s.id].file)}" controls style="height:26px;max-width:150px"></audio>` : ""}</div>
+      <div class="nar">${esc(s.narration)}</div>${s.on_screen_text ? `<div class="vis">字卡：${esc(s.on_screen_text)}</div>` : ""}
+      <div class="vis">${desc}</div>${a?.credit ? `<div class="vis">© ${esc(a.credit)}</div>` : ""}
+      ${atAssets && alts ? `<div class="alts">${alts}</div>` : ""}
+      ${atAssets ? `<label class="chk"><input type="checkbox" ${sel ? "checked" : ""} onchange="toggleSel('${s.id}',this.checked)"> 重做此鏡</label>
+        ${sel ? `<textarea placeholder="${v.kind?.startsWith("stock") ? "新的搜尋關鍵字" : "新的畫面提示詞"}" oninput="setRegen('${s.id}','${v.kind?.startsWith("stock") ? "query" : (v.kind === "motion" ? "template" : "prompt")}',this.value)">${esc(REGEN[s.id]?.prompt || REGEN[s.id]?.query || "")}</textarea>` : ""}` : ""}
+      </div></div>`;
+  }
+  return h + "</div>";
+}
+function clipBoard() {
+  const c = DATA.data.highlights.clips, a = DATA.data.assets?.scenes || {};
+  return `<div class="grid">${c.map((x, i) => { const s = a[`clip${String(i + 1).padStart(2, "0")}`];
+    return `<div class="scene"><div class="media">${s ? `<video src="${fileUrl(s.file)}" controls preload="none"></video>` : "—"}</div><div class="body"><b>${esc(x.title || "")}</b>
+    <div class="vis">${x.start}s → ${x.end}s</div><div class="nar">${esc(x.hook || x.reason || "")}</div></div></div>`; }).join("")}</div>`;
+}
+function toggleSel(id, on) { on ? SEL.add(id) : SEL.delete(id); render(); }
+function setRegen(id, k, v) { REGEN[id] = { [k]: v }; }
+function pickAlt(id, cid) { SEL.add(id); REGEN[id] = { params: { pick: cid } }; render(); }
+
+function planTab() {
+  const d = DATA.data, awaiting = Object.entries(DATA.gates || {}).find(([, g]) => g.status === "awaiting")?.[0];
+  let h = "";
+  if (d.reference_analysis) { const r = d.reference_analysis;
+    h += `<h2>參考影片分析</h2><div class="card"><div class="kv"><div>長度 / 比例</div><div>${r.duration_s}s · ${r.aspect} · ${r.shot_count} 鏡（平均 ${r.avg_shot_s}s）</div>
+    <div>節奏</div><div>${esc(r.pacing)}</div><div>鉤子</div><div>${esc(r.hook)}</div><div>字幕樣式</div><div>${esc(r.caption_style)}</div><div>音樂</div><div>${esc(r.music)}</div></div>
+    <div style="display:flex;gap:6px;overflow:auto;margin-top:10px">${(r.keyframes || []).map(k => `<img src="${fileUrl(k)}" style="height:120px;border-radius:6px">`).join("")}</div>
+    <table style="margin-top:10px"><tr><th>段落</th><th>時間</th><th>目的</th><th>畫面</th></tr>${(r.structure || []).map(b => `<tr><td>${esc(b.beat)}</td><td>${(+b.start).toFixed(1)}–${(+b.end).toFixed(1)}s</td><td>${esc(b.purpose)}</td><td>${esc(b.visual_style)}</td></tr>`).join("")}</table></div>`; }
+  if (d.proposal) { const p = d.proposal;
+    h += `<h2>企劃</h2><div class="card"><div class="kv"><div>標題</div><div>${esc(p.title)}</div><div>一句話</div><div>${esc(p.logline)}</div><div>受眾 / 語氣</div><div>${esc(p.audience)} · ${esc(p.tone)}</div>
+    <div>風格 / 渲染</div><div>${esc(p.style)} · ${esc(p.renderer)}</div><div>音樂</div><div>${esc(p.music_mood)}</div><div>大綱</div><div>${(p.outline || []).map(esc).join(" → ")}</div>
+    ${p.risks?.length ? `<div>風險</div><div>${p.risks.map(esc).join("；")}</div>` : ""}</div></div>`; }
+  if (d.script) h += `<h2>腳本</h2><div class="card"><table><tr><th>段落</th><th>旁白</th><th>秒</th></tr>${d.script.sections.map(s => `<tr><td>${esc(s.heading)}</td><td>${esc(s.narration)}</td><td>${s.est_duration_s}</td></tr>`).join("")}</table></div>`;
+  if (d.scene_plan?._estimate) { const e = d.scene_plan._estimate;
+    h += `<h2>預估花費</h2><div class="card"><table><tr><th>項目</th><th>類型</th><th>GPU 秒</th><th>費用</th></tr>${e.lines.map(l => `<tr><td>${esc(l.label)}</td><td>${l.kind}</td><td>${l.gpu_s}</td><td>${l.cost.toFixed(3)}</td></tr>`).join("")}
+    <tr><th>合計</th><th></th><th>${e.gpu_minutes} 分</th><th>${e.total_cost.toFixed(2)} ${e.currency}</th></tr></table></div>`; }
+  if (awaiting && d[awaiting]) {
+    const data = { ...d[awaiting] }; delete data._estimate; delete data._budget;
+    h += `<h2>直接編修（${STAGE_ZH[awaiting]}）</h2><textarea id="json-edit" data-gate="${awaiting}" rows="18" style="font:12px ui-monospace,Menlo,monospace" oninput="this.dataset.dirty=1">${esc(JSON.stringify(data, null, 2))}</textarea>
+    <div style="color:var(--muted);font-size:12px;margin-top:4px">修改後按上方「核准」即以此版本繼續。</div>`;
+  }
+  return h || `<div class="empty">尚無企劃資料</div>`;
+}
+function qaTab() {
+  const q = DATA.data.qa; if (!q) return `<div class="empty">成片完成後會自動執行 ffprobe、抽影格、黑畫面/凍結、幻燈片風險、響度、削波、靜音與字幕精準度檢查。</div>`;
+  return q.reports.map(r => `<h2><span class="badge b-${r.status}">${r.status.toUpperCase()}</span> ${esc(r.file)} ${r.auto_fixed ? `<span class="badge">已自動修正 ${r.auto_fixed.join(",")}</span>` : ""}</h2>
+    <div class="card"><table><tr><th>檢查</th><th>結果</th><th>說明</th></tr>${r.results.map(x => `<tr><td>${x.check}</td><td><span class="badge b-${x.status}">${x.status}</span></td><td>${esc(x.message)}</td></tr>`).join("")}</table>
+    <div style="display:flex;gap:6px;margin-top:10px;overflow:auto">${(r.results.find(x => x.check === "frames")?.evidence?.frames || []).map(f => `<img src="${fileUrl(f)}" style="height:110px;border-radius:6px">`).join("")}</div></div>`).join("");
+}
+function finalTab() {
+  const it = DATA.deliverables?.items; const comp = DATA.data.compose;
+  if (!it && !comp) return `<div class="empty">尚未完成</div>`;
+  const list = it || (comp.outputs || [comp]).map(c => ({ video: c.master, srt: c.srt }));
+  return list.map(x => `<div class="card" style="margin-bottom:12px"><video src="${fileUrl(x.video)}" controls style="width:100%;max-height:70vh;background:#000;border-radius:8px"></video>
+    <div class="row" style="margin-top:8px;justify-content:flex-start;gap:8px">${["video", "srt", "ass", "thumbnail"].filter(k => x[k]).map(k => `<a href="${fileUrl(x[k])}" download><button>${k.toUpperCase()}</button></a>`).join("")}
+    ${DATA.deliverables?.readme ? `<a href="${fileUrl(DATA.deliverables.readme)}" target="_blank"><button>README / 出處</button></a>` : ""}</div></div>`).join("");
+}
+function logTab() {
+  const ev = (DATA.events || []).slice(-200).reverse();
+  const dec = (DATA.decisions || []).slice(-50).reverse();
+  return `<h2>事件</h2><div class="log">${ev.map(e => `${new Date(e.at * 1000).toLocaleTimeString()} ${e.kind} ${esc(e.stage || e.gate || "")} ${esc(e.status || e.message || e.scene || "")}`).join("<br>")}</div>
+    <h2>決策紀錄</h2><div class="log">${dec.map(x => `${esc(x.what)} — ${esc(x.why)}`).join("<br>") || "—"}</div>
+    <h2>GPU 用量</h2><div class="log">${(DATA.cost.lines || []).slice(-80).reverse().map(l => `${l.service} ${l.gpu_s}s → ${l.cost}`).join("<br>") || "—"}</div>`;
+}
+init();
+</script>
+</body>
+</html>

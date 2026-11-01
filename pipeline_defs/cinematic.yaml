@@ -1,0 +1,36 @@
+name: cinematic
+title: 電影感短片
+feature: text-to-video
+description: 以 MiniMax H3 為主的敘事短片，鏡頭間以末幀→首幀 I2V 維持連續性，原生音訊 + Foley。
+defaults:
+  aspect: '21:9'
+  pacing:
+  - 4
+  - 10
+  visual_kinds:
+  - h3_t2v
+  - h3_i2v
+  - title_card
+  continuity: true
+  grade: teal_orange
+  subtitle_style: documentary
+  letterbox: false
+  foley: true
+  music_mood: cinematic orchestral
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

@@ -1,0 +1,85 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"__THREE__","three/addons/":"__ADDONS__"}}</script>
+<style>
+#feat{position:absolute;right:6%;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:calc(26px*var(--u))}
+.f{font-weight:700;font-size:calc(38px*var(--u));opacity:0;display:flex;align-items:center;gap:.6em}
+.f i{display:inline-block;width:.5em;height:.5em;border-radius:50%}
+#title{position:absolute;left:6%;top:8%;font-weight:800;font-size:calc(72px*var(--u))}
+</style></head><body><div id="title"></div><div id="feat"></div>
+<script>/*LIB*/
+document.body.style.cssText = `margin:0;width:${W}px;height:${H}px;overflow:hidden;background:radial-gradient(circle at 40% 45%, ${C.bg2}, ${C.bg});color:${C.fg};font-family:'${FONT}',sans-serif;--u:${U}`;
+document.getElementById("title").textContent = P.title || "";
+const featEl = document.getElementById("feat");
+(P.features || []).forEach(f => { const d = document.createElement("div"); d.className = "f"; d.innerHTML = `<i style="background:${C.accent}"></i>`; d.append(f); featEl.appendChild(d); });
+window.__P = P; window.__C = C;
+</script>
+<script type="module">
+import * as THREE from "three";
+const P = window.__P, C = window.__C, W = __W__, H = __H__;
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H); renderer.setPixelRatio(1);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.domElement.style.cssText = "position:absolute;left:0;top:0";
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(32, W / H, .1, 100);
+// studio lighting: key, rim, fill + floor shadow catcher
+const key = new THREE.DirectionalLight(0xffffff, 2.6); key.position.set(3, 5, 4); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); scene.add(key);
+const rim = new THREE.DirectionalLight(new THREE.Color(C.accent), 2.0); rim.position.set(-4, 3, -4); scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x222233, .7));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: .35 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const color = new THREE.Color(P.color || C.accent);
+const pivot = new THREE.Group(); scene.add(pivot);
+function procedural(shape) {
+  const mat = new THREE.MeshPhysicalMaterial({ color, metalness: .6, roughness: .25, clearcoat: 1, clearcoatRoughness: .1 });
+  const g = new THREE.Group();
+  if (shape === "bottle") {
+    const pts = [[0,0],[.42,0],[.46,.05],[.46,1.3],[.38,1.55],[.18,1.75],[.16,2.05],[0,2.05]].map(([x,y]) => new THREE.Vector2(x, y));
+    const m = new THREE.Mesh(new THREE.LatheGeometry(pts, 96), mat); m.castShadow = true; g.add(m);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, .25, 48), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: .4 }));
+    cap.position.y = 2.15; g.add(cap);
+  } else if (shape === "sphere") {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(.9, 96, 64), mat); m.position.y = .9; m.castShadow = true; g.add(m);
+  } else if (shape === "box") {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4, 4, 4, 4), mat); m.position.y = .7; m.castShadow = true; g.add(m);
+  } else { // phone
+    const shapeP = new THREE.Shape(); const w = .75, h = 1.55, r = .14;
+    shapeP.moveTo(-w/2 + r, -h/2); shapeP.lineTo(w/2 - r, -h/2); shapeP.quadraticCurveTo(w/2, -h/2, w/2, -h/2 + r);
+    shapeP.lineTo(w/2, h/2 - r); shapeP.quadraticCurveTo(w/2, h/2, w/2 - r, h/2); shapeP.lineTo(-w/2 + r, h/2);
+    shapeP.quadraticCurveTo(-w/2, h/2, -w/2, h/2 - r); shapeP.lineTo(-w/2, -h/2 + r); shapeP.quadraticCurveTo(-w/2, -h/2, -w/2 + r, -h/2);
+    const body = new THREE.Mesh(new THREE.ExtrudeGeometry(shapeP, { depth: .08, bevelEnabled: true, bevelThickness: .02, bevelSize: .02, bevelSegments: 6 }), mat);
+    body.castShadow = true; g.add(body);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(w - .07, h - .07), new THREE.MeshPhysicalMaterial({ color: 0x05070d, roughness: .05, metalness: .2, clearcoat: 1, emissive: new THREE.Color(C.accent2), emissiveIntensity: .08 }));
+    screen.position.z = .101; g.add(screen);
+    const camBump = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .04, 32), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+    camBump.rotation.x = Math.PI / 2; camBump.position.set(-.2, .55, -.03); g.add(camBump);
+    g.position.y = .85; g.rotation.x = -.05;
+  }
+  return g;
+}
+async function build() {
+  if (P.model) {
+    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+    const gltf = await new GLTFLoader().loadAsync(P.model);
+    const obj = gltf.scene; obj.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()), s = 1.8 / Math.max(size.x, size.y, size.z);
+    obj.scale.setScalar(s); const b2 = new THREE.Box3().setFromObject(obj); obj.position.y -= b2.min.y; obj.position.x -= (b2.min.x + b2.max.x) / 2; obj.position.z -= (b2.min.z + b2.max.z) / 2;
+    pivot.add(obj);
+  } else pivot.add(procedural(P.shape || "phone"));
+}
+const feats = [...document.querySelectorAll(".f")];
+window.render = (t, total) => {
+  const k = Math.min(1, t / .8), e = 1 - Math.pow(1 - k, 3);
+  pivot.rotation.y = t * (P.speed || .6) + (1 - e) * -1.2;
+  const orbit = .25 * Math.sin(t * .35);
+  cam.position.set(Math.sin(orbit) * 5.2, 1.4 + .25 * Math.sin(t * .5), Math.cos(orbit) * 5.2 - (1 - e) * -2);
+  cam.lookAt(0, .9, 0);
+  renderer.render(scene, cam);
+  const out = 1 - Math.max(0, Math.min(1, (t - (total - .5)) / .5));
+  feats.forEach((f, i) => { const v = Math.max(0, Math.min(1, (t - 1 - i * .6) / .4)); f.style.opacity = v * out; f.style.transform = `translateX(${(1 - v) * 30}px)`; });
+  document.getElementById("title").style.opacity = Math.min(1, t / .6) * out;
+};
+build().then(() => { window.__ready = true; }).catch(e => { console.error(e); pivot.add(procedural("box")); window.__ready = true; });
+</script></body></html>

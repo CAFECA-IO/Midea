@@ -1,0 +1,33 @@
+name: motion-graphics
+title: 動態圖形 / 文字排版
+feature: motion
+description: 純內建引擎：動態文字排版、資料圖表、時間軸、地圖路線、引言卡，逐格決定性渲染。
+defaults:
+  aspect: '16:9'
+  pacing:
+  - 3
+  - 7
+  visual_kinds:
+  - motion
+  - title_card
+  motion_ratio: 1.0
+  grade: neutral
+  subtitle_style: clean
+  palette: slate
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

@@ -1,0 +1,34 @@
+name: reference-remix
+title: 參考影片結構改編
+feature: reference
+description: 貼上 Shorts / Reels / TikTok 連結 → 分析節奏、分鏡、字幕樣式、腳本結構 → 套用到新主題產生製作計畫與成片。
+defaults:
+  aspect: '9:16'
+  pacing:
+  - 1
+  - 4
+  visual_kinds:
+  - h3_t2v
+  - motion
+  - stock_video
+  karaoke: true
+  subtitle_style: shorts
+  grade: vibrant
+  palette: slate
+  lock_timing: true
+stages:
+- reference_analysis
+- proposal
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- reference_analysis
+- scene_plan
+- assets
+- publish

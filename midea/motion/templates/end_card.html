@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+const svg = stage();
+const t1 = text(svg, P.title || "謝謝收看", W / 2, H * .42, 96);
+const t2 = text(svg, P.text || "", W / 2, H * .58, 40, { fill: C.muted, "font-weight": 400 });
+const btn = el("rect", { width: 360 * U, height: 84 * U, x: W / 2 - 180 * U, y: H * .68, rx: 42 * U, fill: C.accent }, svg);
+const bt = text(svg, P.cta || "訂閱 / Follow", W / 2, H * .68 + 42 * U, 34, { fill: C.bg });
+window.render = (t, total) => {
+  const o = outro(t, total, .6);
+  [t1, t2].forEach((e, i) => { const k = ease.outCubic(prog(t, .1 + i * .25, .6)); e.setAttribute("opacity", k * o); e.setAttribute("transform", `translate(0 ${(1 - k) * 30})`); });
+  const k = ease.outElastic(prog(t, .7, 1.0));
+  btn.setAttribute("transform", `translate(${W / 2} ${H * .68 + 42 * U}) scale(${k}) translate(${-W / 2} ${-(H * .68 + 42 * U)})`);
+  btn.setAttribute("opacity", o); bt.setAttribute("opacity", clamp(k) * o);
+};
+ready();
+</script></body></html>

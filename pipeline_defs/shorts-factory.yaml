@@ -1,0 +1,37 @@
+name: shorts-factory
+title: 直式短影音
+feature: text-to-video
+description: 9:16、前 2 秒鉤子、逐字卡拉 OK 字幕、拍點剪輯，輸出 Shorts / Reels / TikTok。
+defaults:
+  aspect: '9:16'
+  pacing:
+  - 1.5
+  - 4
+  visual_kinds:
+  - h3_t2v
+  - motion
+  - stock_video
+  karaoke: true
+  subtitle_style: shorts
+  grade: vibrant
+  palette: slate
+  beat_sync: true
+  delivery: shorts
+  lock_timing: true
+stages:
+- proposal
+- script
+- scene_plan
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- qa
+- publish
+gates:
+- proposal
+- script
+- scene_plan
+- assets
+- publish

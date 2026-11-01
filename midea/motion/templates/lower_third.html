@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+const svg = stage();
+if (P.transparent) document.body.style.background = "transparent";
+const x0 = W * .07, y0 = H * .76;
+const plate = el("rect", { x: x0, y: y0, height: 120 * U, rx: 10 * U, fill: C.bg2, opacity: .92 }, svg);
+const acc = el("rect", { x: x0, y: y0, width: 10 * U, height: 120 * U, rx: 4 * U, fill: C.accent }, svg);
+const t1 = text(svg, P.title || "Name", x0 + 40 * U, y0 + 42 * U, 46, { "text-anchor": "start" });
+const t2 = text(svg, P.text || "Caption", x0 + 40 * U, y0 + 88 * U, 30, { "text-anchor": "start", fill: C.muted, "font-weight": 400 });
+const wmax = Math.max(t1.getComputedTextLength(), t2.getComputedTextLength()) + 80 * U;
+window.render = (t, total) => {
+  const o = outro(t, total, .4), k = ease.outCubic(prog(t, .1, .6));
+  plate.setAttribute("width", wmax * k); plate.setAttribute("opacity", .92 * o); acc.setAttribute("opacity", o);
+  t1.setAttribute("opacity", prog(t, .45, .3) * o); t2.setAttribute("opacity", prog(t, .6, .3) * o);
+  t1.setAttribute("transform", `translate(${(1 - ease.outCubic(prog(t, .45, .4))) * -30 * U} 0)`);
+};
+ready();
+</script></body></html>

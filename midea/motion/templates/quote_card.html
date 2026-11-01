@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body>
+<style>#q{position:absolute;left:12%;right:12%;top:50%;transform:translateY(-50%);font-size:calc(64px*var(--u));line-height:1.45;font-weight:700}
+#a{margin-top:1.2em;font-size:.5em;font-weight:400;opacity:.7}#mark{position:absolute;left:8%;top:14%;font-size:calc(260px*var(--u));line-height:1;font-family:Georgia,serif}</style>
+<div id="mark">“</div><div id="q"><span id="t"></span><div id="a"></div></div>
+<script>
+/*LIB*/
+document.body.style.cssText = `margin:0;width:${W}px;height:${H}px;overflow:hidden;background:radial-gradient(circle at 30% 30%, ${C.bg2}, ${C.bg});color:${C.fg};font-family:'${FONT}',sans-serif;--u:${U}`;
+document.getElementById("mark").style.color = C.accent;
+const full = String(P.text || "Quote"); const tEl = document.getElementById("t");
+document.getElementById("a").textContent = P.author ? "— " + P.author : "";
+window.render = (t, total) => {
+  const o = outro(t, total, .5);
+  const n = Math.floor(full.length * ease.linear(prog(t, .3, Math.min(total * .55, full.length * .06))));
+  tEl.textContent = full.slice(0, n);
+  document.getElementById("a").style.opacity = prog(t, total * .6, .5) * o;
+  document.getElementById("q").style.opacity = o;
+  document.getElementById("mark").style.opacity = ease.outCubic(prog(t, 0, .6)) * o;
+};
+ready();
+</script></body></html>

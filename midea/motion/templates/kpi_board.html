@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+/*LIB*/
+// Dashboard KPI rows: label, big number, unit, YoY delta (▲ coral / ▼ green), thin progress track with amber marker.
+const svg = stage();
+const items = P.items || [{ label: "第一產業總量", value: 12231412, unit: "千", delta: 5.6, bar: .45 },
+  { label: "第二產業總量", value: 10023231, unit: "千", delta: -2.8, bar: .32 }, { label: "第三產業總量", value: 9931241, unit: "千", delta: 8.2, bar: .6 }];
+if (P.title) text(svg, P.title, W * .08, H * .12, 44, { "text-anchor": "start" });
+const y0 = P.title ? H * .26 : H * .18, gap = (H * .78 - y0) / items.length;
+const fmt = n => Math.round(n).toLocaleString("en-US");
+const rows = items.map((it, i) => {
+  const y = y0 + i * gap, g = el("g", {}, svg);
+  el("rect", { x: W * .08, y: y - 34 * U, width: 6 * U, height: 26 * U, fill: C.accent }, g);
+  text(g, it.label, W * .08 + 22 * U, y - 21 * U, 28, { "text-anchor": "start", fill: C.muted, "font-weight": 400 });
+  const num = text(g, "0", W * .08, y + 40 * U, 72, { "text-anchor": "start", "font-weight": 300 });
+  const unit = text(g, it.unit || "", W * .08, y + 52 * U, 26, { "text-anchor": "start", fill: C.muted, "font-weight": 400 });
+  const up = Number(it.delta) >= 0;
+  const dl = text(g, "", W * .92, y + 36 * U, 44, { "text-anchor": "end", fill: up ? (C.alert || C.accent2) : (C.ok || C.accent2), "font-weight": 600 });
+  el("rect", { x: W * .55, y: y + 70 * U, width: W * .37, height: 4 * U, fill: C.line || "#343a4d" }, g);
+  const mk = el("rect", { y: y + 66 * U, width: 46 * U, height: 12 * U, rx: 2 * U, fill: up ? C.accent : (C.ok || C.accent2) }, g);
+  return { g, num, unit, dl, mk, it, up };
+});
+window.render = (t, total) => {
+  const o = outro(t, total, .45);
+  rows.forEach((r, i) => {
+    const k = ease.outCubic(prog(t, .2 + i * .3, 1.2));
+    r.g.setAttribute("opacity", clamp(prog(t, .1 + i * .3, .4)) * o);
+    r.num.textContent = fmt(Number(r.it.value) * k);
+    r.unit.setAttribute("x", W * .08 + r.num.getComputedTextLength() + 16 * U);
+    r.dl.textContent = (r.up ? "▲ +" : "▼ ") + (Number(r.it.delta) * k).toFixed(1) + " %";
+    r.mk.setAttribute("x", W * .55 + (W * .37 - 46 * U) * clamp(Number(r.it.bar ?? .5)) * k);
+  });
+};
+ready();
+</script></body></html>
