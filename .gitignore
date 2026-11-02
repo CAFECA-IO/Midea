@@ -5,3 +5,4 @@ __pycache__/
 projects/
 .logs/
 .cache/
+.tmp_preview/

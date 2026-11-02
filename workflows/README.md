@@ -1,5 +1,7 @@
 # MiniMax H3 ComfyUI workflows
 
+> **Optional since v0.2:** Midea builds the H3 API graphs itself (`midea/providers/h3_graph.py`, mirroring the official ComfyUI T2V / I2V / R2V templates) using the model files in `config.yaml → services.h3.models`. You only need this guide if you want a custom node graph — set `services.h3.workflows: {t2v: workflows/h3_t2v_api.json}` to override.
+
 Midea drives MiniMax H3 through ComfyUI's HTTP API using **API-format workflow files** that you export once from your own ComfyUI. ComfyUI's H3 node names and inputs change between releases, so Midea doesn't ship pre-made node graphs. You export them from the version you actually run.
 
 ## Steps

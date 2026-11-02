@@ -168,6 +168,11 @@ def check_subtitles(cues: list[dict], narration_spans: list[dict], words: list[d
                     "aligned_ratio": round(len(errs) / len(cues), 2)}
             if sync["mean_ms"] > tol * 1000:
                 issues.append(f"subtitle sync mean error {sync['mean_ms']} ms > {tol*1000:.0f} ms")
+            if sync["aligned_ratio"] < 0.5:
+                warns.append(f"only {sync['aligned_ratio']:.0%} of cues matched the ASR words")
+        else:
+            warns.append("subtitle sync could not be verified against ASR (no cue matched)")
+            sync = {"aligned_ratio": 0.0}
     st = "fail" if issues else "warn" if warns else "pass"
     return _r("subtitles", st, "; ".join(issues[:8] + warns[:4]) or f"{len(cues)} cues OK", sync=sync, cues=len(cues))
 

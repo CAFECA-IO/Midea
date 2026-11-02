@@ -81,15 +81,20 @@ class H3:
         w, h = ASPECTS.get(aspect, ASPECTS["16:9"])
         fps = int(self.defaults.get("fps", 24))
         seed = seed if seed is not None else random.randint(0, 2**31 - 1)
-        if settings().mode == "mock":
+        if settings().mocked("h3"):
             return mock_video(prompt, out, seconds=seconds, w=w // 2, h=h // 2, fps=fps, seed=seed)
 
-        wf_path = settings().root / self.cfg["workflows"][mode]
-        if not wf_path.exists():
-            raise FileNotFoundError(
-                f"H3 {mode} workflow not found at {wf_path}. In ComfyUI open the official MiniMax H3 "
-                f"{mode.upper()} template, replace the prompt/size/seed inputs with {{{{PLACEHOLDERS}}}} "
-                f"(see workflows/README.md), then Workflow ▸ Export (API) to this path.")
+        clean = self.defaults.get("clean_suffix", "Clean frame: no on-screen text, no captions, no subtitles, no logos, no watermark.")
+        if clean and clean.lower() not in prompt.lower():
+            prompt = f"{prompt.rstrip('. ')}. {clean}"          # BasicGuider has no negative prompt
+        mp = float(self.defaults.get("megapixels", 0))
+        if mp:                                         # size from a pixel budget, multiples of 32 (like ResolutionSelector)
+            a, b = (int(x) for x in aspect.split(":")) if ":" in aspect else (16, 9)
+            hh = (mp * 1e6 * b / a) ** 0.5
+            w, h = int(round(hh * a / b / 32) * 32), int(round(hh / 32) * 32)
+        wf_rel = (self.cfg.get("workflows") or {}).get(mode)
+        wf_path = settings().root / wf_rel if wf_rel else None
+        builtin = not (wf_path and wf_path.exists())
         values = {"PROMPT": prompt, "NEGATIVE": negative, "SECONDS": seconds, "FRAMES": seconds * fps + 1,
                   "WIDTH": w, "HEIGHT": h, "SEED": seed, "STEPS": int(self.defaults.get("steps", 30)),
                   "FPS": fps}
@@ -100,7 +105,20 @@ class H3:
                 values["LAST_FRAME"] = self._upload(client, last_frame)
             for i, ref in enumerate((ref_images or [])[:9], 1):
                 values[f"REF_IMAGE_{i}"] = self._upload(client, ref)
-            workflow = _fill(wf_path.read_text(encoding="utf-8"), values)
+            if builtin:                                # graphs mirroring the official H3 templates
+                from . import h3_graph
+                models = self.cfg.get("models") or {}
+                steps = self.defaults.get("steps")
+                if mode == "r2v":
+                    refs = [values[k] for k in sorted(values) if k.startswith("REF_IMAGE_")]
+                    workflow = h3_graph.ref2va(models, prompt=prompt, width=w, height=h, seconds=seconds, seed=seed,
+                                               refs=refs, steps=self.defaults.get("r2v_steps"))
+                else:
+                    workflow = h3_graph.fl2va(models, prompt=prompt, width=w, height=h, seconds=seconds, seed=seed,
+                                              steps=steps, first_frame=values.get("FIRST_FRAME"),
+                                              last_frame=values.get("LAST_FRAME"))
+            else:
+                workflow = _fill(wf_path.read_text(encoding="utf-8"), values)
             r = client.post(f"{self.base}/prompt", json={"prompt": workflow, "client_id": str(uuid.uuid4())})
             if r.status_code != 200:
                 raise RuntimeError(f"ComfyUI rejected workflow: {r.text[:1000]}")
@@ -110,7 +128,7 @@ class H3:
             for node in outputs.values():
                 for key in ("gifs", "videos", "images"):
                     for f in node.get(key, []):
-                        if str(f.get("filename", "")).endswith((".mp4", ".webm", ".mov")):
+                        if str(f.get("filename", "")).endswith((".mp4", ".webm", ".mov", ".mkv")):
                             v = client.get(f"{self.base}/view", params={"filename": f["filename"],
                                            "subfolder": f.get("subfolder", ""), "type": f.get("type", "output")})
                             v.raise_for_status()

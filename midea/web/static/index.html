@@ -116,6 +116,7 @@ async function refreshGpu() {
     const dev = g.gpus[0] ? `${esc(g.gpus[0].name)} · ${(g.gpus[0].used_mb / 1024).toFixed(1)}/${(g.gpus[0].total_mb / 1024).toFixed(0)} GB · ${g.gpus[0].util}%` : "未偵測到 nvidia-smi";
     $("#gpu").innerHTML = `<div class="svc"><span>${dev}</span></div><div class="vram"><i style="width:${pct}%"></i></div>
       <div class="svc"><span>Midea 配置 ${g.resident_gb.toFixed(1)} / ${g.budget_gb.toFixed(1)} GB</span></div>` +
+      (g.foreign_gb ? `<div class="svc" title="${esc((g.foreign || []).map(a => a.pid + " " + a.name).join(", "))}"><span style="color:var(--bad)">其他程式占用 ${g.foreign_gb} GB</span></div>` : "") +
       Object.entries(g.services).map(([n, s]) => `<div class="svc"><span><span class="dot ${s.running ? "on" : ""}"></span><b>${n}</b> ${esc(s.model || "")}</span>
       <span>${s.vram_gb}GB${s.exclusive ? " ⓧ" : ""} <a href="#" onclick="svc('${n}','${s.running ? "stop" : "start"}');return false">${s.running ? "停止" : "啟動"}</a></span></div>`).join("");
   } catch (e) {}

@@ -3,13 +3,17 @@
 const svg = stage();
 const g = el("g", {}, svg);
 const title = text(g, P.title || P.text || "Title", W / 2, H / 2 - 20 * U, P.size || 110);
+// auto-fit: shrink long titles so they never run off-screen
+let fs = (P.size || 110);
+while (fs > 36 && title.getComputedTextLength() > W * .86) { fs -= 4; title.setAttribute("font-size", fs * U); }
 const sub = text(g, P.subtitle || "", W / 2, H / 2 + 90 * U, 40, { fill: C.muted, "font-weight": 400, "letter-spacing": 6 * U });
+let ss = 40; while (ss > 20 && sub.getComputedTextLength() > W * .86) { ss -= 2; sub.setAttribute("font-size", ss * U); }
 const l1 = el("rect", { y: H / 2 + 40 * U, height: 4 * U, fill: C.accent }, g);
 const dots = [...Array(40)].map((_, i) => el("circle", { r: (2 + (i * 37) % 5) * U, fill: i % 3 ? C.accent : C.accent2, opacity: .25 }, svg));
 window.render = (t, total) => {
   const o = outro(t, total, .5);
   const k = ease.outCubic(prog(t, .1, .8));
-  title.setAttribute("opacity", k * o); title.setAttribute("letter-spacing", lerp(30, 2, k) * U);
+  title.setAttribute("opacity", k * o); title.setAttribute("letter-spacing", lerp(fs > 80 ? 30 : 8, 2, k) * U);
   sub.setAttribute("opacity", ease.outCubic(prog(t, .6, .6)) * o);
   const lw = W * .3 * ease.inOutCubic(prog(t, .3, .7));
   l1.setAttribute("x", W / 2 - lw / 2); l1.setAttribute("width", lw); l1.setAttribute("opacity", o);

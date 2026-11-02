@@ -36,7 +36,15 @@ async def foley(video: UploadFile = File(...), prompt: str = Form("")) -> Respon
         src = Path(td) / "in.mp4"
         src.write_bytes(await video.read())
         outdir = Path(td) / "out"
-        cmd = [sys.executable, "infer.py", "--model_path", os.path.expanduser(ARGS.weights),
+        # torchaudio>=2.9 saves through torchcodec (often absent / CUDA-mismatched); route saves to soundfile
+        shim = ("import sys, runpy, soundfile as sf, torchaudio\n"
+                "def _save(path, wav, sr, *a, **k):\n"
+                "    w = wav.detach().cpu().float().numpy()\n"
+                "    sf.write(str(path), w.T if w.ndim == 2 else w, int(sr))\n"
+                "torchaudio.save = _save\n"
+                "sys.argv = ['infer.py'] + sys.argv[1:]\n"
+                "runpy.run_path('infer.py', run_name='__main__')\n")
+        cmd = [sys.executable, "-c", shim, "--model_path", os.path.expanduser(ARGS.weights),
                "--config_path", ARGS.config, "--single_video", str(src),
                "--single_prompt", prompt or "natural ambient sound matching the scene",
                "--output_dir", str(outdir), *shlex.split(ARGS.extra)]

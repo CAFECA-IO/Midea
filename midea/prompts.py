@@ -32,10 +32,18 @@ JSON: {scenes:[{id, section_id, duration_s, narration, on_screen_text,
   transition:{type, duration}, sfx:[{prompt, at, duration, gain_db}], foley, music_cue}],
   music:{prompt, bpm, instrumental:true}, voice:{description}}
 visual.kind ∈ h3_t2v | h3_i2v | stock_video | stock_image | motion | title_card.
-- h3_*: `prompt` = English cinematic prompt; scene duration_s must be an integer 4–15.
+- h3_*: `prompt` = English cinematic prompt describing only imagery (never ask for text, captions, labels or
+  UI in the frame — Midea adds titles and subtitles itself); scene duration_s must be an integer 4–15.
 - stock_*: `query` = 2–5 English search keywords for archival/stock libraries.
 - motion: `template` ∈ kinetic_text | lower_third | svg_character | product_turntable |
   bar_chart | line_chart | gauge | kpi_board | map_route | neural_net | timeline | quote_card ; `params` per template.
+  Template params (use exactly these shapes):
+    kinetic_text {text, title?, emphasis:[words]} · title_card {title, subtitle?} · lower_third {title, text}
+    quote_card {text, author} · bar_chart / line_chart {title, labels:[str], values:[number], unit?}
+    gauge {value, max, label, unit?, items?:[{label, value}]} · kpi_board {title?, items:[{label, value, unit, delta, bar(0-1)}]}
+    neural_net {title, layers:[node counts per layer], labels?:[one per layer]} · timeline {title, events:[{date, label}]}
+    map_route {title, points:[{x(0-1), y(0-1), label}]} · svg_character {action: idle|wave|walk|talk|point|jump, text?}
+    product_turntable {title, shape: phone|bottle|box|sphere, features:[str], model?: path.glb}
 - transition.type ∈ cut | fade | dissolve | wipeleft | slideup | circleopen | zoomin.
 Scene lengths 2–8 s for social pacing, 4–12 s for documentary pacing.
 If real_only is true, ONLY stock_video / stock_image / title_card are allowed."""

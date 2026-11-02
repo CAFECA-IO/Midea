@@ -72,6 +72,10 @@ python -m midea services status                          # 查看 VRAM 配置
 - **24 GB**（RTX 4090／5090）：在 `config.yaml` 設 `gpu.vram_gb: 24`，H3 改為 1024×576、24 steps，每鏡 ≤ 8 秒。成本估算會自動乘 1.8 倍時間。
 - **系統記憶體 ≥ 128 GB**：Qwen3.8-Flash-Next 4-bit 約需 96–114 GB（RAM + VRAM），H3 的 offload 約需 64 GB 以上。記憶體不足時可以在 `services.qwen` 把 `base_url` 指到另一台機器的 OpenAI 相容端點。
 
+## 伺服器部署
+
+共用 GPU 伺服器（cafeca-aich-001）的部署方式、port 配置、接 Strata Qwen 端點與 GPU 共用策略見 [docs/DEPLOY.md](docs/DEPLOY.md)；一鍵安裝模型堆疊：`MIDEA_STACK=/workspace/midea bash scripts/deploy_server.sh`。
+
 ## 授權注意
 
 - **MiniMax H3 Community License** 不涵蓋美國、歐盟、英國、南韓的使用與輸出；年營收 ≥ 2,000 萬美元的組織商用需要另外取得授權。成片 README 會自動附上標示。

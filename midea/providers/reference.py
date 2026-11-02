@@ -80,8 +80,17 @@ def analyze(url: str, workdir: Path) -> dict:
     shots = len(edges) - 1
     stats = {"duration_s": round(dur, 2), "aspect": aspect, "shot_count": shots, "cuts": cuts,
              "avg_shot_s": round(dur / max(1, shots), 2), "transcript": transcript["text"]}
+    from ..tools.analysis import dominant_colors, frame_stats
+    if llm().vision:
+        visual = "Keyframes are attached in shot order."
+    else:                                   # text-only LLM: describe each shot numerically instead
+        rows = []
+        for i, f in enumerate(frames):
+            st = frame_stats(str(f))
+            rows.append(f"shot {i+1}: {edges[i]:.2f}-{edges[i+1]:.2f}s luma {st['luma']:.0f} sat {st['saturation']:.0f} "
+                        f"detail {st['edge_density']:.1f} palette {','.join(dominant_colors(str(f), 3))}")
+        visual = "No images available; per-shot measurements:\n" + "\n".join(rows)
     user = (f"Shot cut times (s): {cuts}\nDuration: {dur:.2f}s, aspect {aspect}, {shots} shots, "
-            f"average shot {stats['avg_shot_s']}s.\nTranscript: {transcript['text'][:4000]}\n"
-            f"Keyframes are attached in shot order.")
+            f"average shot {stats['avg_shot_s']}s.\nTranscript: {transcript['text'][:4000]}\n{visual}")
     llm_out = llm().json("reference", prompts.REFERENCE, user, images=frames, context=stats)
     return {"source_url": url, **stats, **llm_out, "keyframes": [str(p) for p in frames], "video": str(video)}

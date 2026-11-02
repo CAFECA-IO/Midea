@@ -86,6 +86,9 @@ def cues_from_spans(spans: Sequence[dict]) -> list[dict]:
             d = span * max(1, _units(p)) / total
             cues.append({"start": round(t, 3), "end": round(t + d - 0.04, 3), "text": p})
             t += d
+    for a, b in zip(cues, cues[1:]):     # guarantee no overlap between consecutive cues
+        if a["end"] > b["start"] - 0.04:
+            a["end"] = round(max(a["start"] + 0.3, b["start"] - 0.04), 3)
     # merge cues too short to read into their neighbour (same span only)
     merged: list[dict] = []
     for c in cues:
@@ -99,34 +102,64 @@ def cues_from_spans(spans: Sequence[dict]) -> list[dict]:
 
 @tool("subtitle.align_to_words", "subtitle", tags=["asr"])
 def align_to_words(cues: Sequence[dict], words: Sequence[dict]) -> list[dict]:
-    """Snap cue boundaries to ASR word timestamps (monotonic character alignment)."""
+    """Snap cue boundaries to ASR word timestamps.
+
+    Global character alignment (difflib) between the script text and the ASR stream, so a few
+    mis-heard words never derail the cues that follow. zh-TW/zh-CN are compared in one script.
+    """
+    import difflib
     if not words:
         return list(cues)
-    stream = []
+    try:                                   # Whisper often answers zh-TW audio in Simplified: compare in one script
+        from opencc import OpenCC
+        _cc = OpenCC("t2s").convert
+    except Exception:  # noqa: BLE001
+        _cc = lambda s: s  # noqa: E731
+    strip = re.compile(r"[\s，。！？、,.!?;:：；\"'「」『』（）()…—\-]")
+    norm = lambda s: _cc(strip.sub("", s).lower())  # noqa: E731
+    asr_chars, asr_t = [], []
     for w in words:
-        token = re.sub(r"\s+", "", w["word"])
-        for ch in token:
-            stream.append((ch, w["start"], w["end"]))
-    norm = lambda s: re.sub(r"[\s，。！？、,.!?;:：；\"'「」（）()]", "", s).lower()  # noqa: E731
-    out, i = [], 0
-    for c in cues:
-        target = norm(c["text"])
-        if not target or i >= len(stream):
-            out.append(dict(c)); continue
-        start_i = i
-        matched = 0
-        j = i
-        while j < len(stream) and matched < len(target):
-            if stream[j][0].lower() == target[matched]:
-                matched += 1
-            j += 1
-            if j - start_i > len(target) * 3:   # give up on this cue, keep estimate
-                break
-        if matched >= len(target) * 0.6:
-            out.append({**c, "start": round(stream[start_i][1], 3), "end": round(stream[j - 1][2], 3), "aligned": True})
-            i = j
+        tok = norm(w["word"])
+        n = max(1, len(tok))
+        for k, ch in enumerate(tok):                       # spread a word's span over its characters
+            t0 = w["start"] + (w["end"] - w["start"]) * k / n
+            asr_chars.append(ch)
+            asr_t.append((t0, w["start"] + (w["end"] - w["start"]) * (k + 1) / n))
+    cue_chars, owner = [], []
+    for ci, c in enumerate(cues):
+        for ch in norm(c["text"]):
+            cue_chars.append(ch)
+            owner.append(ci)
+    sm = difflib.SequenceMatcher(None, "".join(cue_chars), "".join(asr_chars), autojunk=False)
+    hits: dict[int, list[tuple[float, float]]] = {}
+    for blk in sm.get_matching_blocks():
+        for k in range(blk.size):
+            hits.setdefault(owner[blk.a + k], []).append(asr_t[blk.b + k])
+    out = []
+    for ci, c in enumerate(cues):
+        n = max(1, len(norm(c["text"])))
+        h = hits.get(ci, [])
+        if len(h) >= 0.4 * n:
+            out.append({**c, "start": round(h[0][0], 3), "end": round(h[-1][1], 3), "aligned": True})
         else:
             out.append({**c, "aligned": False})
+    for i in range(len(out) - 1):                          # monotonic, non-overlapping, readable
+        a, b = out[i], out[i + 1]
+        if b["start"] < a["start"] + 0.3:
+            b["start"] = round(a["start"] + 0.3, 3)
+        if a["end"] > b["start"] - 0.04:
+            a["end"] = round(b["start"] - 0.04, 3)
+    for i, c in enumerate(out):                            # hold each cue long enough to read (into the gap after it)
+        max_line, max_cps = limits(c["text"])
+        units = len(strip.sub("", c["text"]))
+        want = c["start"] + max(1.0, units / max_cps)
+        limit = out[i + 1]["start"] - 0.04 if i + 1 < len(out) else want
+        if c["end"] < want:
+            c["end"] = round(max(c["end"], min(want, limit), c["start"] + 0.7), 3)
+    for i in range(len(out) - 1):
+        if out[i]["end"] > out[i + 1]["start"] - 0.04:
+            out[i + 1]["start"] = round(out[i]["end"] + 0.04, 3)
+            out[i + 1]["end"] = max(out[i + 1]["end"], round(out[i + 1]["start"] + 0.6, 3))
     return out
 
 

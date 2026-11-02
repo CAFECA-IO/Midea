@@ -2,12 +2,12 @@
 # 目標硬體：單張 24–48GB NVIDIA GPU + 大容量系統記憶體（建議 ≥128GB）。
 # 重量級模型以「獨佔 GPU 租約」輪流載入，輕量模型可共存。
 
-workspace: ./projects            # 每個專案一個資料夾（checkpoint、素材、成片）
+workspace: ${MIDEA_WORKSPACE:-./projects}           # 每個專案一個資料夾（checkpoint、素材、成片）
 mode: local                      # local = 真實模型；mock = 無 GPU 的乾跑（測試/展示用）
 
 gpu:
   device: 0
-  vram_gb: 48                    # 你的顯卡 VRAM（24 或 48）
+  vram_gb: ${MIDEA_VRAM_GB:-48}    # 你的顯卡 VRAM（24 或 48）
   reserve_gb: 1.5                # 給驅動/桌面保留
   swap_policy: lru               # 需要 VRAM 時，依最久未用順序停止服務
   idle_unload_s: 600             # 服務閒置多久自動卸載
@@ -19,16 +19,22 @@ gpu:
 # 每個服務 = 一個可啟動/停止的子行程 + 健康檢查 URL。
 # Midea 只在需要時啟動，用完依 swap_policy 釋放 VRAM。
 services:
-  qwen:                          # 腳本、分鏡、審稿、視覺理解（多模態）
+  qwen:                          # 腳本、分鏡、審稿（Qwen3.8-Flash-Next）
     kind: llm
     model: Qwen3.8-Flash-Next
-    base_url: http://127.0.0.1:8080/v1
-    health: http://127.0.0.1:8080/health
-    vram_gb: 22                  # MoE 專家層放 CPU（--n-cpu-moe），GPU 只放注意力/共享層
+    # 預設接到已在跑的 OpenAI 相容端點（例如 Strata / llama-server / vLLM）。
+    # 未設定 QWEN_BASE_URL 時，Midea 會用下方 start 指令自行啟動 llama-server。
+    base_url: ${QWEN_BASE_URL:-http://127.0.0.1:8780/v1}
+    health: ${QWEN_HEALTH:-http://127.0.0.1:8780/health}
+    api_model: ${QWEN_API_MODEL:-qwen}  # /v1/models 回報的模型 id
+    vision: ${QWEN_VISION:-true}        # 端點不支援圖片時設 false（參考影片 / 抽影格審核改用文字證據）
+    external: ${QWEN_EXTERNAL:-false}   # true = 由別人管理的常駐服務，Midea 只連線、不啟停
+    bill: ${QWEN_BILL:-true}            # 外部常駐服務設 false，不計入本片 GPU 成本
+    vram_gb: ${QWEN_VRAM_GB:-22}        # 外部服務設 0（其顯存由「其他程式占用」偵測）
     exclusive: false
     start: >-
-      llama-server -hf unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL
-      --host 127.0.0.1 --port 8080 -c 65536 -ngl 999 --n-cpu-moe 40
+      ${LLAMA_SERVER:-llama-server} ${QWEN_MODEL_ARG:--hf unsloth/Qwen3.8-Flash-Next-GGUF:UD-Q4_K_XL}
+      --host 127.0.0.1 --port 8780 -c 65536 -ngl 999 --n-cpu-moe 40
       --jinja --chat-template-kwargs '{"reasoning_effort":"low"}'
       --temp 0.7 --top-p 0.8 --top-k 20 --presence-penalty 1.5
     sampling: {temperature: 0.7, top_p: 0.8, top_k: 20, presence_penalty: 1.5}
@@ -37,62 +43,70 @@ services:
   h3:                            # 影片生成（T2V / I2V / 首尾幀 / 參考圖），含原生音訊
     kind: video
     model: MiniMax-H3 (FL2VA pruned INT8)
-    base_url: http://127.0.0.1:8188
-    health: http://127.0.0.1:8188/system_stats
-    vram_gb: 46
+    base_url: http://127.0.0.1:8781
+    health: http://127.0.0.1:8781/system_stats
+    vram_gb: ${H3_VRAM_GB:-40}   # INT8 pruned + INT8 text encoder，--lowvram 分段載入
+    min_vram_gb: ${H3_MIN_VRAM_GB:-20}   # 共用 GPU 時至少需要的可用顯存（權重由系統記憶體串流）
     exclusive: true              # 需要整張卡；其他服務會先被卸載
     start: >-
-      python main.py --listen 127.0.0.1 --port 8188 --lowvram --reserve-vram 1.5
-    cwd: ~/ComfyUI
-    workflows:                   # 從 ComfyUI「Export (API)」匯出，內含 {{PLACEHOLDER}}
-      t2v: workflows/h3_t2v_api.json
-      i2v: workflows/h3_i2v_api.json
-      r2v: workflows/h3_r2v_api.json
-    defaults: {width: 1344, height: 768, fps: 24, steps: 30, max_seconds: 15}
+      ${COMFY_PYTHON:-python} main.py --listen 127.0.0.1 --port 8781 --lowvram --reserve-vram 1.5
+    cwd: ${MIDEA_STACK:-~}/ComfyUI
+    # 內建 API graph（對應官方 ComfyUI H3 範本），模型檔名如下；若要自訂節點圖，
+    # 在 workflows: 指定匯出的 API workflow（含 {{PLACEHOLDER}}），會優先使用。
+    models:
+      fl2va: minimax_h3_fl2va_pruned_int8_convrot.safetensors      # T2V / I2V / 首尾幀
+      ref2va: minimax_h3_ref2va_pruned_int8_convrot.safetensors    # 參考圖 → 影片
+      text_encoder: qwen3vl_32b_minimax_h3_int8_convrot.safetensors # Ampere 用 INT8（NVFP4 需 Blackwell）
+      video_vae: minimax_h3_video_vae_fp16.safetensors
+      audio_vae: minimax_h3_audio_vae_fp32.safetensors
+      lora_fl2v: minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors   # 8 步 turbo
+      lora_r2v: minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors   # 4 步 turbo
+    workflows: {}                # 例：{t2v: workflows/h3_t2v_api.json}
+    defaults: {megapixels: ${H3_MEGAPIXELS:-0.6}, fps: 24, steps: 8, r2v_steps: 4, max_seconds: 15}
     startup_timeout_s: 600
     # 注意：MiniMax H3 Community License 不涵蓋美國/歐盟/英國/南韓，商用年營收 ≥ 2,000 萬美元需另行授權。
 
   voxcpm:                        # 旁白 TTS、聲音設計、聲音複製（48kHz）
     kind: tts
     model: openbmb/VoxCPM2
-    base_url: http://127.0.0.1:8090
-    health: http://127.0.0.1:8090/health
+    base_url: http://127.0.0.1:8782
+    health: http://127.0.0.1:8782/health
     vram_gb: 8
     exclusive: false
-    start: python -m midea.servers.voxcpm_server --port 8090
+    start: ${AUDIO_PYTHON:-python} -m midea.servers.voxcpm_server --port 8782
     defaults: {cfg_value: 2.0, inference_timesteps: 10, voice: "(warm, clear documentary narrator)"}
     startup_timeout_s: 300
 
   acestep:                       # 背景音樂（含/不含人聲，10s–10min），MIT 授權
     kind: music
     model: ACE-Step 1.5 (acestep-v15-turbo)
-    base_url: http://127.0.0.1:8001
-    health: http://127.0.0.1:8001/health
+    base_url: http://127.0.0.1:8783
+    health: http://127.0.0.1:8783/health
     vram_gb: 6
     exclusive: false
-    start: uv run acestep-api
-    cwd: ~/ACE-Step-1.5
+    start: ACESTEP_API_HOST=127.0.0.1 ACESTEP_API_PORT=8783 ${UV:-uv} run acestep-api
+    cwd: ${MIDEA_STACK:-~}/ACE-Step-1.5
     defaults: {inference_steps: 8, audio_format: wav, batch_size: 1}
     startup_timeout_s: 300
 
   foley:                         # 影片→音效（依畫面自動配 Foley，48kHz）
     kind: sfx_v2a
-    model: tencent/HunyuanVideo-Foley
-    base_url: http://127.0.0.1:8092
-    health: http://127.0.0.1:8092/health
+    model: tencent/HunyuanVideo-Foley (XL)
+    base_url: http://127.0.0.1:8784
+    health: http://127.0.0.1:8784/health
     vram_gb: 20
     exclusive: false
-    start: python -m midea.servers.foley_server --port 8092 --repo ~/HunyuanVideo-Foley --weights ~/models/HunyuanVideo-Foley
+    start: ${FOLEY_PYTHON:-python} -m midea.servers.foley_server --port 8784 --repo ${MIDEA_STACK:-~}/HunyuanVideo-Foley --weights ${MIDEA_STACK:-~}/models/HunyuanVideo-Foley --config ./configs/hunyuanvideo-foley-xl.yaml --extra="--model_size xl --enable_offload"
     startup_timeout_s: 600
 
   sfx:                           # 文字→音效（轉場 whoosh、環境音、UI 音）
     kind: sfx_t2a
-    model: stabilityai/stable-audio-open-1.0
-    base_url: http://127.0.0.1:8093
-    health: http://127.0.0.1:8093/health
+    model: stable-audio-open-1.0 (fallback AudioLDM2)
+    base_url: http://127.0.0.1:8785
+    health: http://127.0.0.1:8785/health
     vram_gb: 6
     exclusive: false
-    start: python -m midea.servers.sfx_server --port 8093
+    start: ${SFX_PYTHON:-python} -m midea.servers.sfx_server --port 8785
     startup_timeout_s: 300
 
   whisper:                       # 字幕對齊 / 參考影片轉錄（faster-whisper large-v3）

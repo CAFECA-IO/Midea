@@ -8,3 +8,5 @@ pydantic>=2.6
 playwright>=1.44          # then: playwright install chromium
 yt-dlp>=2026.1.1          # reference links (Shorts / Reels / TikTok)
 soundfile>=0.12
+json-repair>=0.30
+opencc-python-reimplemented>=0.1.7   # zh-TW ↔ zh-CN matching for subtitle alignment

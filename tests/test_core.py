@@ -101,3 +101,18 @@ def test_qa_flags_black_video(tmp_path):
     checks = {r["check"]: r["status"] for r in rep["results"]}
     assert rep["status"] == "fail"
     assert checks["frames"] == "fail" and checks["black"] == "fail"
+
+
+def test_motion_params_are_normalized():
+    from midea.tools.motion_engine import normalize_params as n
+    assert n("neural_net", {"layers": 3, "nodes": [4, 6, 2]})["layers"] == [4, 6, 2]
+    assert n("neural_net", {"layers": "deep"})["layers"] == [4, 6, 6, 3]
+    lc = n("line_chart", {"points": [[0, 1], [1, 0.5]]})
+    assert lc["values"] == [1.0, 0.5] and lc["labels"] == ["0", "1"]
+    assert n("timeline", {"events": ["a", "b"]})["events"][1] == {"date": "2", "label": "b"}
+
+
+def test_h3_prompt_drops_text_inviting_style():
+    from midea.pipelines.runner import _h3_prompt
+    p = _h3_prompt("macro shot of neurons, no text", "slow dolly-in", "slate palette, kinetic typography, clean burned subtitles")
+    assert "typography" not in p and "subtitles" not in p and "slate palette" in p and "dolly" in p

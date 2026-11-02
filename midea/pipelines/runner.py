@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import zlib
 import shutil
 import threading
@@ -79,6 +80,22 @@ def dims(aspect: str) -> tuple[int, int]:
     return w, h
 
 
+_TEXTY = re.compile(r"(text|typograph|subtitle|caption|title|label|logo|watermark|letter|word|font|svg|motion graphic|"
+                    r"kinetic|\bui\b|interface|h3|burn|overlay|lower[- ]third|字幕|文字)", re.I)
+
+
+def _h3_prompt(prompt: str, camera: str, style: str) -> str:
+    """Join the shot prompt with camera + house style, dropping any phrase that would invite rendered text:
+    video models happily paint fake captions when the style mentions typography or subtitles."""
+    parts = []
+    for chunk in (prompt, camera, style):
+        for phrase in re.split(r"[,;，；]", chunk or ""):
+            phrase = phrase.strip()
+            if phrase and not _TEXTY.search(phrase) and phrase.lower() not in (p.lower() for p in parts):
+                parts.append(phrase)
+    return ", ".join(parts)
+
+
 class Runner:
     def __init__(self, project: Project, *, auto_approve: bool = False):
         self.p = project
@@ -103,6 +120,8 @@ class Runner:
 
     # ------------------------------------------------------------------ infra
     def _bill(self, service: str, seconds: float) -> None:
+        if str(settings().services.get(service, {}).get("bill", True)).lower() in ("false", "0", "no"):
+            return
         c = costmod.money_for_gpu_seconds(seconds)
         def f(d: dict) -> None:
             d["cost"]["actual"] = round(d["cost"].get("actual", 0) + c, 4)
@@ -114,11 +133,22 @@ class Runner:
                 "proposal": self.p.stage_data("proposal"), "script": self.p.stage_data("script"),
                 "reference": self.p.stage_data("reference_analysis")}
 
-    def ask(self, task: str, system: str, payload: dict, feedback: str = "", **kw) -> Any:
+    def ask(self, task: str, system: str, payload: dict, feedback: str = "", model: Any = None, **kw) -> Any:
+        """Ask the LLM; when `model` (a pydantic schema) is given, validate and retry with the errors."""
         user = json.dumps(payload, ensure_ascii=False, indent=1)
         if feedback:
             user += f"\n\nREVIEWER FEEDBACK — revise accordingly:\n{feedback}"
-        return llm().json(task, system, user, context={**self.ctx(), **payload}, **kw)
+        err = ""
+        for attempt in range(3):
+            raw = llm().json(task, system, user + err, context={**self.ctx(), **payload}, **kw)
+            if model is None:
+                return raw
+            try:
+                return model(**raw).model_dump() if isinstance(raw, dict) else model.model_validate(raw).model_dump()
+            except Exception as e:  # noqa: BLE001 — pydantic.ValidationError / TypeError
+                log.warning("%s output failed schema validation (attempt %d): %s", task, attempt + 1, str(e)[:300])
+                err = f"\n\nYour previous JSON did not match the required schema: {str(e)[:1500]}\nReturn corrected JSON."
+        raise ValueError(f"{task}: LLM output never matched the schema")
 
     def run(self) -> None:
         try:
@@ -146,23 +176,27 @@ class Runner:
         fn: Callable[[str], Any] = getattr(self, f"st_{stage}")
         feedback = ""
         for rev in range(MAX_REVISIONS + 1):
+            if stage == "publish" and (self.p.stage_data("qa") or {}).get("status") == "fail" and self.auto:
+                self.p.checkpoint(stage, {}, status="blocked")
+                self.p.set_status("qa_failed", stage)
+                raise RuntimeError("QA failed — the video was not published. See the QA report on the board.")
             self.p.set_status("running", stage)
             self.p.emit("log", {"stage": stage, "message": f"開始 {stage}" + (f"（第 {rev+1} 版）" if rev else "")})
             data = fn(feedback)
             self.p.checkpoint(stage, data, status="review" if stage in self.pipe.get("gates", []) else "done")
             if stage not in self.pipe.get("gates", []) or stage in (settings().get("gates_disabled") or []):
+                if stage == "publish":
+                    data = self._deliver()
                 self.p.checkpoint(stage, data)
                 return
-            if stage == "publish" and (self.p.stage_data("qa") or {}).get("status") == "fail" and self.auto:
-                self.p.checkpoint(stage, data, status="blocked")
-                self.p.set_status("qa_failed", stage)
-                raise RuntimeError("QA failed — the video was not published. See the QA report on the board.")
             cheap = stage == "scene_plan" and isinstance(data, dict) and \
                 (data.get("_estimate") or {}).get("total_cost", 1e9) < float(settings().get("auto_approve_below", 0) or 0)
             rec = self.p.gate(stage, self._summary(stage, data), auto=self.auto or cheap)
             if rec.get("edits"):
                 data = self._apply_edits(stage, data, rec["edits"])
             if rec["status"] == "approved":
+                if stage == "publish":
+                    data = self._deliver()
                 self.p.checkpoint(stage, data)
                 return
             feedback = rec.get("note", "") or "請重新製作，提升品質。"
@@ -200,7 +234,7 @@ class Runner:
                    "style_defaults": self.df}
         if self.p.stage_data("reference_analysis"):
             payload["reference"] = {k: v for k, v in self.p.stage_data("reference_analysis").items() if k != "keyframes"}
-        out = Proposal(**self.ask("proposal", prompts.PROPOSAL, payload, feedback)).model_dump()
+        out = self.ask("proposal", prompts.PROPOSAL, payload, feedback, model=Proposal)
         if self.brief.get("real_only"):
             out["renderer"] = "stock"
         out["duration_s"] = self.brief.get("duration_s", out.get("duration_s", 60))
@@ -210,7 +244,7 @@ class Runner:
 
     def st_script(self, feedback: str) -> dict:
         prop = self.p.stage_data("proposal")
-        s = Script(**self.ask("script", prompts.SCRIPT, {"brief": self.brief, "proposal": prop}, feedback)).model_dump()
+        s = self.ask("script", prompts.SCRIPT, {"brief": self.brief, "proposal": prop}, feedback, model=Script)
         for sec in s["sections"]:                       # re-estimate from real speech rate
             sec["est_duration_s"] = round(max(sec.get("est_duration_s", 0), A.estimate_speech_seconds(sec["narration"]) + 0.6), 2)
         return s
@@ -238,10 +272,9 @@ class Runner:
                    "motion_templates": self.df.get("motion_templates"), "real_only": bool(self.brief.get("real_only"))}
         if self.pipe_name == "reference-remix":
             payload["reference"] = {k: v for k, v in self.p.stage_data("reference_analysis").items() if k != "keyframes"}
-            raw = self.ask("adapt", prompts.ADAPT, payload, feedback)
+            plan = self.ask("adapt", prompts.ADAPT, payload, feedback, model=ScenePlan)
         else:
-            raw = self.ask("scene_plan", prompts.SCENE_PLAN, payload, feedback)
-        plan = ScenePlan(**raw).model_dump()
+            plan = self.ask("scene_plan", prompts.SCENE_PLAN, payload, feedback, model=ScenePlan)
         plan["scenes"] = [self._sanitize_scene(sc, kinds) for sc in plan["scenes"]]
         est = costmod.estimate_plan(plan, self.brief)
         spent = self.p.load()["cost"].get("actual", 0)
@@ -263,6 +296,9 @@ class Runner:
         if v["kind"].startswith("h3"):          # H3 renders 4–15 s; shorter beats are trimmed after generation
             sc["duration_s"] = float(min(15.0, sc["duration_s"]))
         sc["duration_s"] = max(1.5, float(sc["duration_s"]))
+        tr = sc.get("transition") or {}
+        tr["duration"] = min(float(tr.get("duration", 0.4) or 0), 0.6, sc["duration_s"] / 3)
+        sc["transition"] = tr
         return sc
 
     # ------------------------------------------------------------------ voice
@@ -278,8 +314,13 @@ class Runner:
             if not sc.get("narration", "").strip():
                 continue
             f = self.p.path("scenes", sc["id"], "voice.wav")
-            if not f.exists() or feedback:
+            marker = f.with_suffix(".json")
+            mock_now = settings().mocked("voxcpm")
+            stale = not marker.exists() or json.loads(marker.read_text()).get("mock") != mock_now \
+                or json.loads(marker.read_text()).get("text") != sc["narration"]
+            if not f.exists() or feedback or stale:      # placeholder voices are redone once the real model is up
                 A.tts(sc["narration"], f, voice=None if ref_wav else voice, reference_wav=ref_wav)
+                marker.write_text(json.dumps({"mock": mock_now, "text": sc["narration"]}, ensure_ascii=False))
             d = ff.duration(f)
             room = sc["duration_s"] - 0.35
             if self.df.get("lock_timing") and d > room > 0:      # keep the reference's beat timing: speed up ≤1.3×
@@ -319,16 +360,19 @@ class Runner:
         v, sid, dur = sc["visual"], sc["id"], float(sc["duration_s"])
         d = self.p.path("scenes", sid, "x").parent
         final = d / "visual.mp4"
-        if final.exists() and not force:
-            return json.loads((d / "visual.json").read_text(encoding="utf-8"))
         kind = v["kind"]
+        svc = "h3" if kind.startswith("h3") else None
+        if final.exists() and not force and (d / "visual.json").exists():
+            cached = json.loads((d / "visual.json").read_text(encoding="utf-8"))
+            if not svc or cached.get("mock", True) == settings().mocked(svc):    # regenerate stale placeholders (legacy metas count as mock)
+                return cached
         meta: dict = {"kind": kind}
         raw = d / "raw.mp4"
         if kind.startswith("h3"):
             gen_s = int(min(15, max(4, math.ceil(dur))))
             seed = (zlib.crc32(sid.encode()) % 10_000) + (int(Path(d / "seed").read_text()) + 1 if seed_bump and (d / "seed").exists() else 0)
             (d / "seed").write_text(str(seed))
-            prompt = ", ".join(x for x in [v.get("prompt", ""), v.get("camera", ""), self.p.stage_data("proposal", {}).get("style", "")] if x)
+            prompt = _h3_prompt(v.get("prompt", ""), v.get("camera", ""), self.p.stage_data("proposal", {}).get("style", ""))
             prev = self._prev_h3_scene(plan, index)
             if kind == "h3_i2v" or (self.df.get("continuity") and prev):
                 ff_img = d / "first_frame.png"
@@ -358,8 +402,16 @@ class Runner:
                 if vo.exists():
                     env = me.audio_envelope(str(vo), self.fps)
                     params["mouth"] = [0.0] * int(0.25 * self.fps) + env       # voice starts 0.25 s in
-            me.render(tpl, raw, seconds=dur, w=self.w, h=self.h, fps=self.fps, params=params,
-                      palette=self.df.get("palette", "slate"), audio=audio)
+            try:
+                me.render(tpl, raw, seconds=dur, w=self.w, h=self.h, fps=self.fps, params=params,
+                          palette=self.df.get("palette", "slate"), audio=audio)
+            except Exception as e:  # noqa: BLE001 — never lose the scene to a template/param problem
+                log.warning("%s: template %s failed (%s); falling back to kinetic_text", sid, tpl, e)
+                self.p.decide(f"{sid}: {tpl} → kinetic_text", f"template render failed: {str(e)[:200]}")
+                tpl = "kinetic_text"
+                me.render(tpl, raw, seconds=dur, w=self.w, h=self.h, fps=self.fps,
+                          params={"text": params.get("text") or sc.get("narration", "")[:40], "title": params.get("title", "")},
+                          palette=self.df.get("palette", "slate"))
             shutil.copy(raw, final)
             meta.update(template=tpl)
         elif kind == "user_media":
@@ -376,7 +428,8 @@ class Runner:
             tmp = d / "tmp.mp4"; call("video.old_film", src=str(final), out=str(tmp)); tmp.replace(final)
         thumb = d / "thumb.jpg"
         vt.thumbnail(str(final), str(thumb), at=min(dur / 2, ff.duration(final) / 2))
-        meta.update(file=self.p.rel(final), thumb=self.p.rel(thumb), duration=round(ff.duration(final), 3))
+        meta.update(file=self.p.rel(final), thumb=self.p.rel(thumb), duration=round(ff.duration(final), 3),
+                    mock=bool(svc and settings().mocked(svc)))
         (d / "visual.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
         return meta
 
@@ -494,9 +547,11 @@ class Runner:
         total = ff.duration(picture)
         # narration stem + subtitle spans
         vclips, spans = [], []
+        prev_end = -1.0
         for sc in plan["scenes"]:
             if sc["id"] in voice:
-                at = tl["starts"][sc["id"]] + 0.25
+                at = max(tl["starts"][sc["id"]] + 0.25, prev_end + 0.2)     # never overlap narration
+                prev_end = at + voice[sc["id"]]["duration"]
                 vclips.append({"path": str(self.p.dir / voice[sc["id"]]["file"]), "at": at, "gain_db": 0})
                 spans.append({"start": at, "end": at + voice[sc["id"]]["duration"], "text": sc["narration"], "scene": sc["id"]})
         vo = self.p.path("audio", "voice_stem.wav")
@@ -526,9 +581,9 @@ class Runner:
             au.duck_mix(str(voice), str(music), str(mix), sfx=str(fx), music_db=-8, total=total)
         else:
             au.place([{"path": str(voice), "at": 0}, {"path": str(fx), "at": 0}], str(mix), total)
-        return self._finish(picture, mix, ed["spans"], total)
+        return self._finish(picture, mix, ed["spans"], total, asr_src=voice)
 
-    def _finish(self, picture: Path, mix: Path, spans: list[dict], total: float) -> dict:
+    def _finish(self, picture: Path, mix: Path, spans: list[dict], total: float, asr_src: Path | None = None) -> dict:
         # loudness → mux → grade → subtitles → delivery encode
         target = float(settings().get("qa.loudness_lufs", -14))
         mixn = self.p.path("audio", "mix_norm.wav")
@@ -539,8 +594,10 @@ class Runner:
         vt.color_grade(str(av), str(graded), self.df.get("grade", "neutral"))
         cues = sub.cues_from_spans(spans) if self.brief.get("subtitles", True) else []
         words = []
-        if cues and settings().mode != "mock":
-            words = [w for s in transcribe(mixn, self.brief.get("language"))["segments"] for w in s["words"]]
+        if cues and not settings().mocked("whisper"):
+            # transcribe the clean narration stem when we have it (music/SFX make ASR skip whole sentences)
+            src = asr_src if asr_src and Path(asr_src).exists() else mixn
+            words = [w for s in transcribe(src, self.brief.get("language"))["segments"] for w in s["words"]]
             cues = sub.align_to_words(cues, words)
         srt = self.p.path("compose", "subtitles.srt")
         ass = self.p.path("compose", "subtitles.ass")
@@ -570,7 +627,7 @@ class Runner:
         for c in outs:
             master = str(self.p.dir / c["master"])
             vision = None
-            if settings().mode != "mock":
+            if not settings().mocked("qwen") and llm().vision:
                 plan = self.p.stage_data("scene_plan") or {}
                 def vision(frames: list[str], plan=plan) -> dict:
                     r = llm().json("review_frames", prompts.REVIEW_FRAMES,
@@ -612,9 +669,16 @@ class Runner:
         return {"status": status, "reports": reports}
 
     def st_publish(self, feedback: str) -> dict:
+        """Preview for the final gate; files are only copied to final/ after approval (_deliver)."""
         qa_rep = self.p.stage_data("qa")
-        if qa_rep["status"] == "fail" and not feedback:
+        if qa_rep["status"] == "fail":
             self.p.emit("log", {"stage": "publish", "message": "QA fail — 需在看板上明確覆核才能發佈"})
+        comp = self.p.stage_data("compose")
+        outs = comp.get("outputs") or [comp]
+        return {"final": outs[0]["master"], "qa": qa_rep["status"], "pending_approval": True}
+
+    def _deliver(self) -> dict:
+        qa_rep = self.p.stage_data("qa")
         comp = self.p.stage_data("compose")
         outs = comp.get("outputs") or [comp]
         title = (self.p.stage_data("proposal") or {}).get("title") or self.p.id
@@ -665,7 +729,7 @@ class Runner:
     def st_transcribe(self, feedback: str) -> dict:
         src = self.p.dir / self.p.stage_data("ingest")["file"]
         tr = transcribe(src, None)
-        if settings().mode == "mock" and not tr["segments"]:
+        if settings().mocked("whisper") and not tr["segments"]:
             d = ff.duration(src)
             tr["segments"] = [{"start": t, "end": min(d, t + 4.5), "text": f"（示範字幕 {i+1}）這是一段測試語音內容。",
                                "words": []} for i, t in enumerate(range(0, int(d), 5))]
@@ -676,7 +740,7 @@ class Runner:
         tr = self.p.stage_data("transcribe")
         lo, hi = self.df.get("pacing", [15, 60])
         segs = [{"i": i, "start": round(s["start"], 2), "end": round(s["end"], 2), "text": s["text"]} for i, s in enumerate(tr["segments"])]
-        if settings().mode == "mock":
+        if settings().mocked("qwen"):
             end = segs[-1]["end"] if segs else 20
             return {"clips": [{"start": 0.0, "end": min(end, float(hi)), "title": "精華 1", "hook": segs[0]["text"] if segs else ""}]}
         r = llm().json("highlights", prompts.DIRECTOR + f"""
@@ -729,7 +793,7 @@ starting on a strong hook and ending on a complete thought. JSON {{clips:[{{star
         tr = self.p.stage_data("transcribe")
         lang = self.brief.get("language", "zh-TW")
         segs = [{"i": i, "start": s["start"], "end": s["end"], "text": s["text"]} for i, s in enumerate(tr["segments"])]
-        if settings().mode == "mock":
+        if settings().mocked("qwen"):
             return {"language": lang, "segments": [{**s, "translation": f"[{lang}] {s['text']}"} for s in segs]}
         r = llm().json("translate", f"""You are a professional dubbing translator. Translate each segment into {lang}.
 Each translation must be speakable within the segment's duration (≈4.2 CJK chars/s or 2.5 words/s); shorten

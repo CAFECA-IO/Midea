@@ -35,7 +35,7 @@ def tts(text: str, out: Path, *, voice: str | None = None, reference_wav: str | 
     out.parent.mkdir(parents=True, exist_ok=True)
     cfg = _svc("voxcpm")
     d = cfg.get("defaults", {})
-    if settings().mode == "mock":
+    if settings().mocked("voxcpm"):
         return _mock_voice(text, out)
     body = {"text": text, "voice": voice or d.get("voice", ""), "reference_wav": reference_wav,
             "cfg_value": cfg_value or d.get("cfg_value", 2.0), "inference_timesteps": steps or d.get("inference_timesteps", 10)}
@@ -63,7 +63,7 @@ def music(prompt: str, seconds: float, out: Path, *, bpm: int | None = None, lyr
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     seconds = max(10.0, min(600.0, float(seconds)))
-    if settings().mode == "mock":
+    if settings().mocked("acestep"):
         return _mock_music(seconds, out, bpm or 96)
     cfg = _svc("acestep")
     base = cfg["base_url"]
@@ -110,7 +110,7 @@ def foley(video: Path, prompt: str, out: Path) -> Path:
     """HunyuanVideo-Foley: synthesise synchronised sound for a video clip."""
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    if settings().mode == "mock":
+    if settings().mocked("foley"):
         return sfx(prompt or "ambient room tone", ff.duration(video), out)
     cfg = _svc("foley")
     with scheduler().lease("foley"), open(video, "rb") as fh:
@@ -126,7 +126,7 @@ def sfx(prompt: str, seconds: float, out: Path, *, seed: int | None = None) -> P
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     seconds = max(0.3, min(47.0, float(seconds)))
-    if settings().mode == "mock":
+    if settings().mocked("sfx"):
         color = "white" if "whoosh" in prompt.lower() else "brown"
         ff.run(["-f", "lavfi", "-i", f"anoisesrc=color={color}:sample_rate=48000:duration={seconds}:amplitude=0.5",
                 "-af", f"bandpass=f=1200:w=900,afade=t=in:d={seconds*0.4:.2f},"

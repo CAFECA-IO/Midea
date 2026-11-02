@@ -32,8 +32,11 @@ class TTSReq(BaseModel):
 @app.on_event("startup")
 def _load() -> None:
     global MODEL
+    import os
     from voxcpm import VoxCPM
-    MODEL = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False)
+    # torch.compile needs Python headers + a working triton toolchain; off by default for portability
+    optimize = os.environ.get("VOXCPM_OPTIMIZE", "0").lower() in ("1", "true", "yes")
+    MODEL = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False, optimize=optimize)
 
 
 @app.get("/health")

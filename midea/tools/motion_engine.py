@@ -79,13 +79,138 @@ def _html(template: str, params: dict, w: int, h: int, palette: str) -> str:
                .replace("__THREE__", three_url).replace("__ADDONS__", addons_url))
 
 
+def _num(x, default=0.0):
+    try:
+        return float(str(x).replace(",", "").rstrip("%"))
+    except (TypeError, ValueError):
+        return default
+
+
+def _series(p: dict) -> tuple[list, list]:
+    """Accept values/labels, points [[x,y]] / [{x,y}], data [{label,value}], x+y arrays."""
+    if isinstance(p.get("values"), list) and p["values"]:
+        vals = [_num(v) for v in p["values"]]
+        labels = [str(l) for l in (p.get("labels") or [])][:len(vals)]
+        return vals, labels + [str(i + 1) for i in range(len(labels), len(vals))]
+    for key in ("points", "data", "series"):
+        pts = p.get(key)
+        if isinstance(pts, list) and pts:
+            vals, labels = [], []
+            for i, q in enumerate(pts):
+                if isinstance(q, (list, tuple)) and len(q) >= 2:
+                    labels.append(str(q[0])); vals.append(_num(q[1]))
+                elif isinstance(q, dict):
+                    labels.append(str(q.get("label", q.get("x", q.get("name", i + 1)))))
+                    vals.append(_num(q.get("value", q.get("y", 0))))
+                else:
+                    labels.append(str(i + 1)); vals.append(_num(q))
+            return vals, labels
+    if isinstance(p.get("y"), list):
+        ys = [_num(v) for v in p["y"]]
+        xs = [str(x) for x in (p.get("x") or range(1, len(ys) + 1))]
+        return ys, xs
+    return [3, 5, 2, 7, 4], ["A", "B", "C", "D", "E"]
+
+
+def normalize_params(template: str, params: dict) -> dict:
+    """Coerce free-form LLM params into the shapes each template expects (never crash a render)."""
+    p = dict(params or {})
+    for k in ("text", "title", "subtitle", "label", "unit", "author", "cta"):
+        if k in p and p[k] is not None and not isinstance(p[k], str):
+            p[k] = str(p[k])
+    if template in ("bar_chart", "line_chart"):
+        p["values"], p["labels"] = _series(p)
+        p.setdefault("unit", p.get("y_unit", "") or "")
+        p["title"] = p.get("title") or p.get("y_label") or ""
+    elif template == "neural_net":
+        layers = p.get("layers")
+        nodes = p.get("nodes") or p.get("neurons") or p.get("layer_sizes")
+        if isinstance(nodes, list) and all(isinstance(_num(n, None), float) for n in nodes):
+            layers = nodes
+        if isinstance(layers, list):
+            sizes = [int(_num(x, 4)) if not isinstance(x, dict) else int(_num(x.get("nodes", x.get("size", 4)), 4)) for x in layers]
+            if isinstance(layers[0], str) and not nodes:
+                sizes = [3] + [5] * max(0, len(layers) - 2) + [2] if len(layers) > 1 else [4]
+                p.setdefault("labels", layers)
+        elif isinstance(layers, (int, float)):
+            n = max(2, min(7, int(layers)))
+            sizes = [4] + [6] * (n - 2) + [2]
+        else:
+            sizes = [4, 6, 6, 3]
+        p["layers"] = [max(1, min(9, s)) for s in sizes][:8]
+        labels = p.get("labels")
+        if not (isinstance(labels, list) and len(labels) == len(p["layers"])):
+            p.pop("labels", None)
+    elif template == "timeline":
+        ev = p.get("events") or p.get("items") or p.get("milestones") or []
+        out = []
+        for i, e in enumerate(ev if isinstance(ev, list) else []):
+            if isinstance(e, dict):
+                out.append({"date": str(e.get("date", e.get("year", e.get("time", i + 1)))),
+                            "label": str(e.get("label", e.get("text", e.get("event", e.get("title", "")))))})
+            else:
+                out.append({"date": str(i + 1), "label": str(e)})
+        if out:
+            p["events"] = out[:8]
+        else:
+            p.pop("events", None)
+    elif template == "map_route":
+        pts = p.get("points") or p.get("stops") or []
+        out = []
+        for i, q in enumerate(pts if isinstance(pts, list) else []):
+            n = max(1, len(pts) - 1)
+            if isinstance(q, dict):
+                out.append({"x": _num(q.get("x"), 0.12 + 0.76 * i / n), "y": _num(q.get("y"), 0.55 - 0.15 * (i % 2)),
+                            "label": str(q.get("label", q.get("name", "")))})
+            else:
+                out.append({"x": 0.12 + 0.76 * i / n, "y": 0.55 - 0.15 * (i % 2), "label": str(q)})
+        for q in out:                            # tolerate 0–100 coordinates
+            q["x"] = q["x"] / 100 if q["x"] > 1 else q["x"]
+            q["y"] = q["y"] / 100 if q["y"] > 1 else q["y"]
+        if out:
+            p["points"] = out[:8]
+        else:
+            p.pop("points", None)
+    elif template == "gauge":
+        p["value"] = _num(p.get("value", p.get("score", 42)), 42)
+        p["max"] = _num(p.get("max", 100), 100) or 100
+        if not isinstance(p.get("items"), list):
+            p.pop("items", None)
+        else:
+            p["items"] = [{"label": str(i.get("label", i.get("name", ""))), "value": _num(i.get("value"))}
+                          for i in p["items"] if isinstance(i, dict)][:5]
+    elif template == "kpi_board":
+        items = p.get("items") or p.get("metrics") or []
+        if isinstance(items, list) and items:
+            p["items"] = [{"label": str(i.get("label", i.get("name", ""))), "value": _num(i.get("value")),
+                           "unit": str(i.get("unit", "")), "delta": _num(i.get("delta", i.get("change", 0))),
+                           "bar": min(1.0, max(0.0, _num(i.get("bar", 0.5), 0.5)))} for i in items if isinstance(i, dict)][:4]
+        else:
+            p.pop("items", None)
+    elif template == "product_turntable":
+        if not isinstance(p.get("features"), list):
+            p["features"] = [str(p["features"])] if p.get("features") else []
+        p["features"] = [str(f) for f in p["features"]][:5]
+        if p.get("model") and not str(p["model"]).lower().endswith((".glb", ".gltf")):
+            p.pop("model")
+    elif template == "svg_character":
+        if p.get("action") not in ("idle", "wave", "walk", "talk", "point", "jump"):
+            p.pop("action", None)
+    elif template == "kinetic_text":
+        if isinstance(p.get("emphasis"), str):
+            p["emphasis"] = [p["emphasis"]]
+    p.pop("colors", None)                        # keep the house palette consistent across scenes
+    return p
+
+
 def render(template: str, out: str | Path, *, seconds: float, w: int = 1920, h: int = 1080, fps: int = 24,
            params: dict | None = None, palette: str = "slate", audio: str | None = None) -> str:
     from playwright.sync_api import sync_playwright
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     page_path = out.with_suffix(".html")
-    page_path.write_text(_html(template, params or {}, w, h, palette), encoding="utf-8")
+    params = normalize_params(template, params or {})
+    page_path.write_text(_html(template, params, w, h, palette), encoding="utf-8")
     frames = max(1, int(round(seconds * fps)))
     drift = float((params or {}).get("drift", 0.04))      # slow push-in so holds never read as frozen frames
     a_in = ["-i", audio] if audio else ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]

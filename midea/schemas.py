@@ -3,13 +3,18 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 VisualKind = Literal["h3_t2v", "h3_i2v", "h3_r2v", "stock_video", "stock_image", "motion", "title_card", "user_media"]
 
 
 class _M(BaseModel):
     model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_nulls(cls, v):        # LLMs emit null for "not applicable" — let field defaults apply instead
+        return {k: x for k, x in v.items() if x is not None} if isinstance(v, dict) else v
 
 
 class Brief(_M):
@@ -42,6 +47,30 @@ class Proposal(_M):
     outline: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
 
+    @field_validator("renderer", mode="before")
+    @classmethod
+    def _renderer(cls, v):
+        v = str(v or "").lower()
+        for k in ("stock", "motion", "h3", "hybrid"):
+            if k in v:
+                return k
+        return "hybrid"
+
+    @field_validator("outline", "risks", mode="before")
+    @classmethod
+    def _flatten(cls, v):          # LLMs sometimes return [{beat, visual, ...}] instead of strings
+        if isinstance(v, str):
+            return [v]
+        out = []
+        for x in v or []:
+            if isinstance(x, dict):
+                head = x.get("beat") or x.get("title") or x.get("name") or ""
+                rest = "；".join(str(val) for k, val in x.items() if k not in ("beat", "title", "name") and isinstance(val, (str, int, float)))
+                out.append(f"{head}：{rest}" if head and rest else head or rest)
+            else:
+                out.append(str(x))
+        return out
+
 
 class ScriptSection(_M):
     id: str
@@ -61,6 +90,17 @@ class Script(_M):
 
 class Visual(_M):
     kind: VisualKind = "h3_t2v"
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _kind(cls, v):
+        v = str(v or "").lower().strip()
+        alias = {"h3": "h3_t2v", "t2v": "h3_t2v", "i2v": "h3_i2v", "r2v": "h3_r2v", "stock": "stock_video",
+                 "archival": "stock_video", "photo": "stock_image", "image": "stock_image", "title": "title_card",
+                 "motion_graphics": "motion", "animation": "motion"}
+        valid = ("h3_t2v", "h3_i2v", "h3_r2v", "stock_video", "stock_image", "motion", "title_card", "user_media")
+        return v if v in valid else alias.get(v, "motion")
+
     prompt: str = ""
     query: str = ""                         # 素材庫搜尋字串
     sources: list[str] = Field(default_factory=list)
@@ -87,6 +127,13 @@ class Scene(_M):
     sfx: list[SFX] = Field(default_factory=list)
     foley: bool = False
     music_cue: str = ""
+
+    @field_validator("foley", mode="before")
+    @classmethod
+    def _foley(cls, v):             # accept a description string as "yes, add foley"
+        if isinstance(v, str):
+            return v.strip().lower() not in ("", "false", "no", "none", "0")
+        return bool(v)
 
 
 class ScenePlan(_M):

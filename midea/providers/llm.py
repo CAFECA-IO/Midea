@@ -28,9 +28,18 @@ def _extract_json(text: str) -> Any:
         return json.loads(text)
     except json.JSONDecodeError:
         m = _JSON_RE.search(text)
-        if not m:
-            raise
-        return json.loads(m.group(0))
+        body = m.group(0) if m else text
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            try:                        # tolerate a missing comma / trailing comma in long outputs
+                from json_repair import repair_json
+                fixed = repair_json(body, return_objects=True)
+                if fixed in ("", None, [], {}):
+                    raise
+                return fixed
+            except ImportError:
+                raise
 
 
 def _image_part(path: str | Path) -> dict:
@@ -46,11 +55,15 @@ class LLM:
         cfg = settings().services.get(self.service, {})
         self.base_url = cfg.get("base_url", "http://127.0.0.1:8080/v1")
         self.sampling = cfg.get("sampling", {})
-        self.model = cfg.get("model", "qwen")
+        self.model = cfg.get("api_model") or cfg.get("model", "qwen")
+        self.vision = str(cfg.get("vision", True)).lower() not in ("false", "0", "no")
 
     def chat(self, system: str, user: str, *, images: list[str | Path] | None = None,
              max_tokens: int = 8192, temperature: float | None = None) -> str:
         content: Any = user
+        if images and not self.vision:
+            log.info("LLM endpoint has no vision support; sending text only (%d images dropped)", len(images))
+            images = None
         if images:
             content = [{"type": "text", "text": user}, *(_image_part(p) for p in images[:12])]
         body = {"model": self.model, "max_tokens": max_tokens,
@@ -60,15 +73,20 @@ class LLM:
             body["temperature"] = temperature
         with scheduler().lease(self.service):
             r = httpx.post(f"{self.base_url}/chat/completions", json=body, timeout=1800)
+            if r.status_code == 400:            # some servers reject non-OpenAI sampling keys
+                for k in ("top_k", "presence_penalty"):
+                    body.pop(k, None)
+                r = httpx.post(f"{self.base_url}/chat/completions", json=body, timeout=1800)
             r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
     def json(self, task: str, system: str, user: str, *, images: list | None = None,
              context: dict | None = None, retries: int = 2) -> Any:
         """Ask for strict JSON. In mock mode a deterministic local planner answers instead."""
-        if settings().mode == "mock":
+        if settings().mocked("qwen"):
             return mock_llm.answer(task, user, context or {})
-        sys = system + "\n\nRespond with ONE valid JSON value only. No prose, no markdown fences."
+        sys = system + ("\n\nRespond with ONE valid JSON value only. No prose, no markdown fences. "
+                        "Use \"\" or [] instead of null; keep every string on one line.")
         last: Exception | None = None
         for attempt in range(retries + 1):
             text = self.chat(sys, user if attempt == 0 else f"{user}\n\n(Previous answer was not valid JSON: {last})",
