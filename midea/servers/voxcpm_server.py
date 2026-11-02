@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import threading
 
 import soundfile as sf
 import uvicorn
@@ -19,6 +20,7 @@ from pydantic import BaseModel
 
 app = FastAPI(title="Midea VoxCPM2")
 MODEL = None
+LOCK = threading.Lock()          # VoxCPM2 is not re-entrant: concurrent generate() calls corrupt its caches
 
 
 class TTSReq(BaseModel):
@@ -54,7 +56,8 @@ def tts(req: TTSReq) -> Response:
     if req.reference_wav:
         kw["reference_wav_path"] = req.reference_wav
         kw["cfg_value"] = max(req.cfg_value, 2.5)
-    wav = MODEL.generate(**kw)
+    with LOCK:
+        wav = MODEL.generate(**kw)
     buf = io.BytesIO()
     sf.write(buf, wav, MODEL.tts_model.sample_rate, format="WAV")
     return Response(buf.getvalue(), media_type="audio/wav")

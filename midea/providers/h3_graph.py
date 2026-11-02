@@ -57,8 +57,9 @@ def fl2va(m: dict, *, prompt: str, width: int, height: int, seconds: float, seed
 
 
 def ref2va(m: dict, *, prompt: str, width: int, height: int, seconds: float, seed: int, refs: list[str],
-           steps: int | None = None) -> dict:
-    """Reference→video: up to 9 reference images (refer to them as <Picture 1>… in the prompt)."""
+           steps: int | None = None, audios: list[str] | None = None) -> dict:
+    """Reference→video: up to 9 reference images (<Picture 1>…) and up to 3 standalone reference
+    audio clips (<Audio 1>…, e.g. an actor's line for voice + lip-sync) — names are uploaded input files."""
     lora = m.get("lora_r2v")
     g = _common(m, m["ref2va"], lora, 1.0, steps or (4 if lora else 20), seed)
     inputs = {"clip": ["3", 0], "vae": ["4", 0], "audio_vae": ["5", 0], "prompt": prompt, "width": int(width),
@@ -67,5 +68,9 @@ def ref2va(m: dict, *, prompt: str, width: int, height: int, seconds: float, see
         nid = str(30 + i)
         g[nid] = {"class_type": "LoadImage", "inputs": {"image": name}}
         inputs[f"ref_images.ref_image_{i}"] = [nid, 0]
+    for j, name in enumerate((audios or [])[:3]):
+        nid = str(40 + j)
+        g[nid] = {"class_type": "LoadAudio", "inputs": {"audio": name}}
+        inputs[f"ref_audios.ref_audio_{j}"] = [nid, 0]
     g["6"] = {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": inputs}
     return g

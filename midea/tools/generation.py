@@ -125,3 +125,61 @@ def ref_analyze(url: str, workdir: str) -> dict:
 def ref_cuts(src: str, threshold: float = 0.32) -> list[float]:
     """Shot cut times of a reference video."""
     return R.detect_cuts(Path(src), threshold)
+
+
+
+# ---------------------------------------------------------------- virtual actors
+@tool("gen.image", "generate", service="h3", est_seconds=lambda **_: 25)
+def image(prompt: str, out: str, width: int = 1024, height: int = 1024, seed: int | None = None) -> str:
+    """Z-Image-Turbo text→image (8 steps, photoreal) on the local ComfyUI."""
+    from ..providers.image_zimage import generate
+    return str(generate(prompt, Path(out), width=width, height=height, seed=seed))
+
+
+@tool("actor.draft", "actor", service="qwen")
+def actor_draft(idea: str, language: str = "zh-TW") -> dict:
+    """Expand a one-line idea into a full virtual-actor profile (age, gender, look, wardrobe, personality, voice)."""
+    from .. import actors as AC
+    return AC.draft(idea, language)
+
+
+@tool("actor.create", "actor")
+def actor_create(profile: dict) -> dict:
+    """Register a virtual actor (unique @handle) from a profile dict."""
+    from .. import actors as AC
+    return AC.summary(AC.create(profile))
+
+
+@tool("actor.portraits", "actor", service="h3", est_seconds=lambda views=None, **_: 25 * len(views or [1, 2, 3, 4]))
+def actor_portraits(ref: str, views: list[str] | None = None, reseed: bool = False) -> dict:
+    """Generate costume photos (headshot / three-quarter / profile / full body) with one shared seed."""
+    from .. import actors as AC
+    a = AC.find(ref)
+    if not a:
+        raise KeyError(ref)
+    return AC.summary(AC.generate_portraits(a.id, views, reseed=reseed))
+
+
+@tool("actor.voice", "actor", service="voxcpm", est_seconds=lambda **_: 20)
+def actor_voice(ref: str, text: str | None = None) -> dict:
+    """Design the actor's voice with VoxCPM2; the sample becomes the cloning reference for every line."""
+    from .. import actors as AC
+    a = AC.find(ref)
+    if not a:
+        raise KeyError(ref)
+    return AC.summary(AC.generate_voice(a.id, text))
+
+
+@tool("actor.find", "actor")
+def actor_find(text: str) -> list[dict]:
+    """Resolve @handle mentions in a brief to actor profiles."""
+    from .. import actors as AC
+    return [AC.bible(AC.load(i)) for i in AC.mentions(text)]
+
+
+@tool("actor.filmography", "actor")
+def actor_films(ref: str) -> list[dict]:
+    """Every video an actor appears in (role, scenes, lines, status)."""
+    from .. import actors as AC
+    a = AC.find(ref)
+    return AC.filmography(a.id) if a else []

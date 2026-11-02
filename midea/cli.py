@@ -7,6 +7,9 @@
   midea approve <project> scene_plan [--reject --note "..."]
   midea services status | up qwen | down h3
   midea tools | pipelines | doctor | qa video.mp4
+  midea actors new "32 歲台灣女記者，俐落短髮" [--handle mei]   # AI 補完設定 + 定妝照 + 聲音
+  midea actors list | show @mei | portraits @mei [--reseed] | voice @mei
+  midea make "@mei 走訪台南老街的一天" --pipeline cinematic   # @ 指定演員演出
 """
 from __future__ import annotations
 
@@ -128,6 +131,41 @@ def cmd_doctor(a: argparse.Namespace) -> None:
         print(ok(bool(os.environ.get(k))), k, "(optional)")
 
 
+def cmd_actors(a: argparse.Namespace) -> None:
+    from . import actors as AC
+    if a.action == "list":
+        for x in AC.list_all():
+            films = AC.filmography(x.id)
+            print(f"@{x.handle:<16} {x.name:<8} {x.age:>3} {x.gender:<9} portraits={len(x.portraits)} "
+                  f"voice={'yes' if x.voice.sample else 'no'} films={len(films)}  [{x.id}]")
+        return
+    if a.action == "new":
+        if not a.ref:
+            sys.exit("usage: midea actors new \"一句話描述\"")
+        d = AC.draft(a.ref, a.language)
+        if a.handle:
+            d["handle"] = a.handle
+        x = AC.create(d)
+        print(f"建立 @{x.handle}（{x.name}）[{x.id}]，生成定妝照與聲音中…")
+        if not a.no_gen:
+            AC.generate_portraits(x.id)
+            AC.generate_voice(x.id)
+        print(json.dumps(AC.summary(AC.load(x.id)), ensure_ascii=False, indent=1))
+        return
+    x = AC.find(a.ref or "")
+    if not x:
+        sys.exit(f"找不到演員 {a.ref}")
+    if a.action == "portraits":
+        AC.generate_portraits(x.id, reseed=a.reseed)
+    elif a.action == "voice":
+        AC.generate_voice(x.id)
+    x = AC.load(x.id)
+    out = x.model_dump(exclude={"jobs"})
+    out["films"] = [{k: f[k] for k in ("project", "title", "status", "role", "lines")} for f in AC.filmography(x.id)]
+    out["folder"] = str(AC.adir(x.id))
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="midea", description="Local-GPU AI video studio")
     ap.add_argument("--mock", action="store_true", help="run without GPU models (placeholders)")
@@ -157,6 +195,12 @@ def main(argv: list[str] | None = None) -> None:
     q = sp.add_parser("qa"); q.add_argument("file"); q.add_argument("--duration", type=float); q.add_argument("--aspect")
     q.set_defaults(fn=cmd_qa)
     sp.add_parser("doctor").set_defaults(fn=cmd_doctor)
+    ac = sp.add_parser("actors", help="virtual actors (@handle)")
+    ac.add_argument("action", choices=["list", "new", "show", "portraits", "voice"])
+    ac.add_argument("ref", nargs="?", help="描述（new）或 @handle")
+    ac.add_argument("--handle"); ac.add_argument("--language", default="zh-TW")
+    ac.add_argument("--reseed", action="store_true"); ac.add_argument("--no-gen", action="store_true")
+    ac.set_defaults(fn=cmd_actors)
     a = ap.parse_args(argv)
     if a.mock:
         os.environ["MIDEA_MODE"] = "mock"

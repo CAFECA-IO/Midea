@@ -20,6 +20,7 @@ from typing import Any, Callable
 
 import yaml
 
+from .. import actors as AC
 from .. import cost as costmod
 from .. import prompts, qa
 from ..config import settings
@@ -96,6 +97,34 @@ def _h3_prompt(prompt: str, camera: str, style: str) -> str:
     return ", ".join(parts)
 
 
+CAST_PROMPT_VERSION = 2       # bump when cast_prompt changes so cached actor shots are regenerated
+
+
+def cast_prompt(body: str, cast: list, per_actor: int = 2) -> tuple[str, list[str]]:
+    """Ref2VA prompt: bind each actor to their reference pictures and refer to them only through those
+    tags. Names are never put in the prompt: video models paint them onto signs and walls."""
+    refs: list[str] = []
+    binds = []
+    for a in cast:
+        imgs = AC.ref_images(a)[:max(1, per_actor)]
+        if len(refs) + len(imgs) > 9:
+            imgs = imgs[: 9 - len(refs)]
+        if not imgs:
+            continue
+        idx = list(range(len(refs) + 1, len(refs) + len(imgs) + 1))
+        refs += imgs
+        tags = " and ".join(f"<Picture {i}>" for i in idx)
+        binds.append(f"{tags} show{'s' if len(idx) == 1 else ''} the same {AC.person_en(a)}")
+        who = f"the {AC.person_en(a).split('-old ')[-1]} from <Picture {idx[0]}>"
+        body = re.sub(rf"@(?:{re.escape(a.handle)}|{re.escape(a.name)})(?![A-Za-z0-9_])", who, body, flags=re.I)
+        for nm in filter(None, (a.name, a.name_en)):          # never let a name reach the video model
+            body = body.replace(nm, who)
+    body = re.sub(r"(^|[.!?]\s+)the ", lambda m: m.group(1) + "The ", body.strip())
+    head = "; ".join(binds)
+    keep = "Every person keeps exactly the face, hairstyle, body and outfit shown in their reference pictures."
+    return f"{head}. {body.strip().rstrip('.')}. {keep}", refs
+
+
 class Runner:
     def __init__(self, project: Project, *, auto_approve: bool = False):
         self.p = project
@@ -116,7 +145,13 @@ class Runner:
         self.w, self.h = dims(aspect)
         self.fps = 30 if aspect == "9:16" else int(settings().get("render.fps", 24))
         self.auto = auto_approve
-        scheduler().on_usage = self._bill
+        # cast: @handle mentions in the prompt (or explicit brief.actors) → actor ids
+        ids = AC.resolve_list(self.brief.get("actors")) or AC.mentions(self.brief.get("prompt", ""))
+        if ids != (d["brief"].get("actors") or []):
+            project.update(lambda x: x["brief"].__setitem__("actors", ids))
+            if ids:
+                project.decide("cast = " + ", ".join(ids), "resolved @mentions in the brief")
+        self.brief["actors"] = ids
 
     # ------------------------------------------------------------------ infra
     def _bill(self, service: str, seconds: float) -> None:
@@ -128,13 +163,39 @@ class Runner:
             d["cost"]["lines"].append({"service": service, "gpu_s": round(seconds, 1), "cost": c})
         self.p.update(f)
 
+    # ------------------------------------------------------------------ cast
+    def cast(self) -> list[AC.Actor]:
+        out = []
+        for aid in self.brief.get("actors") or []:
+            try:
+                out.append(AC.load(aid))
+            except KeyError:
+                log.warning("actor %s no longer exists", aid)
+        return out
+
+    def _actor_id(self, ref: str) -> str | None:
+        ref = str(ref or "").strip()
+        if not ref or ref.lower() in ("narrator", "旁白", "none", "@narrator"):
+            return None
+        cast = self.cast()
+        key = AC.normalize_handle(ref).lower()
+        for a in cast:
+            if key in (a.id, a.handle.lower(), AC.normalize_handle(a.name).lower(), AC.normalize_handle(a.name_en).lower()):
+                return a.id
+        return None
+
     def ctx(self) -> dict:
         return {"brief": self.brief, "pipeline": self.pipe_name, "defaults": self.df,
+                "cast": [AC.bible(a) for a in self.cast()],
                 "proposal": self.p.stage_data("proposal"), "script": self.p.stage_data("script"),
                 "reference": self.p.stage_data("reference_analysis")}
 
     def ask(self, task: str, system: str, payload: dict, feedback: str = "", model: Any = None, **kw) -> Any:
         """Ask the LLM; when `model` (a pydantic schema) is given, validate and retry with the errors."""
+        cast = [AC.bible(a) for a in self.cast()]
+        if cast and task in ("proposal", "script", "scene_plan", "adapt"):
+            payload = {**payload, "cast": cast}
+            system = system + prompts.CAST
         user = json.dumps(payload, ensure_ascii=False, indent=1)
         if feedback:
             user += f"\n\nREVIEWER FEEDBACK — revise accordingly:\n{feedback}"
@@ -151,6 +212,10 @@ class Runner:
         raise ValueError(f"{task}: LLM output never matched the schema")
 
     def run(self) -> None:
+        with scheduler().billing(self._bill):
+            self._run()
+
+    def _run(self) -> None:
         try:
             self.p.set_status("running")
             for stage in self.pipe["stages"]:
@@ -245,6 +310,9 @@ class Runner:
     def st_script(self, feedback: str) -> dict:
         prop = self.p.stage_data("proposal")
         s = self.ask("script", prompts.SCRIPT, {"brief": self.brief, "proposal": prop}, feedback, model=Script)
+        for sec in s["sections"]:
+            aid = self._actor_id(sec.get("speaker", ""))
+            sec["speaker"] = aid or ""
         for sec in s["sections"]:                       # re-estimate from real speech rate
             sec["est_duration_s"] = round(max(sec.get("est_duration_s", 0), A.estimate_speech_seconds(sec["narration"]) + 0.6), 2)
         return s
@@ -275,6 +343,10 @@ class Runner:
             plan = self.ask("adapt", prompts.ADAPT, payload, feedback, model=ScenePlan)
         else:
             plan = self.ask("scene_plan", prompts.SCENE_PLAN, payload, feedback, model=ScenePlan)
+        speakers = {sec["id"]: sec.get("speaker", "") for sec in (self.p.stage_data("script") or {}).get("sections", [])}
+        for sc in plan["scenes"]:
+            if not sc.get("speaker") and speakers.get(sc.get("section_id")):
+                sc["speaker"] = speakers[sc["section_id"]]
         plan["scenes"] = [self._sanitize_scene(sc, kinds) for sc in plan["scenes"]]
         est = costmod.estimate_plan(plan, self.brief)
         spent = self.p.load()["cost"].get("actual", 0)
@@ -287,7 +359,30 @@ class Runner:
 
     def _sanitize_scene(self, sc: dict, kinds: list[str]) -> dict:
         v = sc["visual"]
-        if v["kind"] not in kinds and v["kind"] != "title_card":
+        # cast: resolve @handles (listed or written into the prompt) to actor ids
+        refs = list(sc.get("actors") or []) + [m.group(1) for m in AC.HANDLE_RE.finditer(v.get("prompt", ""))]
+        ids: list[str] = []
+        for r in refs:
+            aid = self._actor_id(r)
+            if aid and aid not in ids:
+                ids.append(aid)
+        h3_ok = any(k.startswith("h3") for k in kinds) and not self.brief.get("real_only")
+        sc["actors"] = ids[: int(settings().get("actors.max_per_shot", 4))] if h3_ok else []
+        sc["speaker"] = self._actor_id(sc.get("speaker", "")) or ""
+        if sc["actors"] and v["kind"] in ("h3_t2v", "h3_i2v", "stock_video", "stock_image", "user_media"):
+            self.p.decide(f"{sc['id']}: {v['kind']} → h3_r2v", "cast on screen: reference-to-video keeps the actor's face")
+            v["kind"] = "h3_r2v"
+            if not v.get("prompt"):
+                lead = AC.load(sc["actors"][0])
+                v["prompt"] = f"@{lead.handle} " + (v.get("query") or "in a natural cinematic setting, medium shot")
+        if v["kind"] == "h3_r2v" and not sc["actors"] and not (v.get("sources") or self.brief.get("user_media")):
+            v["kind"] = "h3_t2v" if "h3_t2v" in kinds else kinds[0]
+        if v["kind"] != "h3_r2v":
+            sc["actors"] = []                         # only reference-to-video shots actually show the cast
+        lip_on = str(settings().get("actors.lipsync", True)).lower() not in ("false", "0", "no", "off")
+        sc["lipsync"] = bool(sc.get("lipsync")) and lip_on and v["kind"] == "h3_r2v" and len(sc["actors"]) == 1 \
+            and sc["speaker"] == sc["actors"][0] and bool(sc.get("narration", "").strip())
+        if v["kind"] not in kinds and v["kind"] != "title_card" and not (v["kind"] == "h3_r2v" and sc["actors"]):
             fallback = next((k for k in kinds if k.startswith("stock")), None) if self.brief.get("real_only") else kinds[0]
             self.p.decide(f"{sc['id']}: {v['kind']} → {fallback}", "visual kind not allowed by pipeline")
             v["kind"] = fallback
@@ -310,24 +405,32 @@ class Runner:
             settings().get("services.voxcpm.defaults.voice")
         ref_wav = voice if voice and Path(str(voice)).suffix.lower() in (".wav", ".flac", ".mp3") else None
         out = {}
+        cast = {a.id: a for a in self.cast()}
         for sc in plan["scenes"]:
             if not sc.get("narration", "").strip():
                 continue
             f = self.p.path("scenes", sc["id"], "voice.wav")
             marker = f.with_suffix(".json")
             mock_now = settings().mocked("voxcpm")
-            stale = not marker.exists() or json.loads(marker.read_text()).get("mock") != mock_now \
-                or json.loads(marker.read_text()).get("text") != sc["narration"]
+            v_desc, v_ref, who = (None if ref_wav else voice), ref_wav, ""
+            actor = cast.get(sc.get("speaker") or "")
+            if actor:                                    # the actor speaks in their own (cloned) voice
+                actor = cast[actor.id] = AC.ensure_ready(actor, need_voice=True)
+                v_desc, v_ref, who = None, str(AC.adir(actor.id) / actor.voice.sample), actor.id
+            old = json.loads(marker.read_text()) if marker.exists() else {}
+            stale = old.get("mock") != mock_now or old.get("text") != sc["narration"] or old.get("speaker", "") != who \
+                or old.get("ref") != v_ref
             if not f.exists() or feedback or stale:      # placeholder voices are redone once the real model is up
-                A.tts(sc["narration"], f, voice=None if ref_wav else voice, reference_wav=ref_wav)
-                marker.write_text(json.dumps({"mock": mock_now, "text": sc["narration"]}, ensure_ascii=False))
+                A.tts(sc["narration"], f, voice=v_desc, reference_wav=v_ref)
+                marker.write_text(json.dumps({"mock": mock_now, "text": sc["narration"], "speaker": who, "ref": v_ref},
+                                             ensure_ascii=False))
             d = ff.duration(f)
             room = sc["duration_s"] - 0.35
             if self.df.get("lock_timing") and d > room > 0:      # keep the reference's beat timing: speed up ≤1.3×
                 g = f.with_name("voice_fit.wav")
                 ff.run(["-i", f, "-af", f"atempo={min(1.3, d / room):.3f}", g])
                 f, d = g, ff.duration(g)
-            out[sc["id"]] = {"file": self.p.rel(f), "duration": round(d, 3)}
+            out[sc["id"]] = {"file": self.p.rel(f), "duration": round(d, 3), "speaker": who}
             need = d + (0.35 if self.df.get("lock_timing") else 0.6)
             if need > sc["duration_s"]:
                 self.p.decide(f"{sc['id']}: duration {sc['duration_s']} → {need:.2f}s", "narration is longer than planned")
@@ -362,11 +465,22 @@ class Runner:
         final = d / "visual.mp4"
         kind = v["kind"]
         svc = "h3" if kind.startswith("h3") else None
+        cast = [a for a in self.cast() if a.id in (sc.get("actors") or [])] if kind == "h3_r2v" else []
+        if cast:                                       # photos first: a changed portrait invalidates the shot
+            cast = [AC.ensure_ready(a, need_portraits=True) for a in cast]
+        sig = "|".join(f"{a.id}:{','.join(AC.ref_images(a))}" for a in cast)
+        sig = f"v{CAST_PROMPT_VERSION}|{sig}" if sig else ""
+        lip_wav = None
+        if cast and sc.get("lipsync"):
+            vo = (self.p.stage_data("voice") or {}).get("clips", {}).get(sid)
+            lip_wav = str(self.p.dir / vo["file"]) if vo else None
+            sig += f"|lipsync:{lip_wav}:{zlib.crc32(sc.get('narration', '').encode())}"
         if final.exists() and not force and (d / "visual.json").exists():
             cached = json.loads((d / "visual.json").read_text(encoding="utf-8"))
-            if not svc or cached.get("mock", True) == settings().mocked(svc):    # regenerate stale placeholders (legacy metas count as mock)
+            fresh = not svc or cached.get("mock", True) == settings().mocked(svc)   # regenerate stale placeholders (legacy metas count as mock)
+            if fresh and cached.get("actor_sig", "") == sig:
                 return cached
-        meta: dict = {"kind": kind}
+        meta: dict = {"kind": kind, "actor_sig": sig, "actors": [a.id for a in cast]}
         raw = d / "raw.mp4"
         if kind.startswith("h3"):
             gen_s = int(min(15, max(4, math.ceil(dur))))
@@ -374,7 +488,16 @@ class Runner:
             (d / "seed").write_text(str(seed))
             prompt = _h3_prompt(v.get("prompt", ""), v.get("camera", ""), self.p.stage_data("proposal", {}).get("style", ""))
             prev = self._prev_h3_scene(plan, index)
-            if kind == "h3_i2v" or (self.df.get("continuity") and prev):
+            if kind == "h3_r2v" and cast:
+                prompt, refs = cast_prompt(prompt, cast, int(settings().get("actors.refs_per_actor", 2)))
+                if lip_wav:                            # the actor says the line on camera, voiced like <Audio 1>
+                    who = "She" if cast[0].gender == "female" else "He" if cast[0].gender == "male" else "They"
+                    prompt += (f" {who} faces the camera and clearly says, in exactly the voice, timing and tone of <Audio 1>: "
+                               f"\u201c{sc['narration'].strip()}\u201d. Natural lip movements matching the speech.")
+                h3().generate(prompt, raw, seconds=gen_s, aspect=self.aspect, mode="r2v", ref_images=refs, seed=seed,
+                              ref_audios=[lip_wav] if lip_wav else None)
+                meta["refs"] = refs
+            elif kind == "h3_i2v" or (self.df.get("continuity") and prev and kind != "h3_r2v"):
                 ff_img = d / "first_frame.png"
                 src = v.get("params", {}).get("first_frame") or (prev and vt.last_frame(str(self.p.dir / "scenes" / prev / "visual.mp4"), str(ff_img)))
                 if src:
@@ -388,6 +511,10 @@ class Runner:
                 h3().generate(prompt, raw, seconds=gen_s, aspect=self.aspect, mode="t2v", seed=seed)
             meta.update(prompt=prompt, seed=seed)
             vt.normalize(str(raw), str(final), self.w, self.h, self.fps, dur, fit="cover", keep_audio=True)
+            if lip_wav:                                # the lip-synced speech becomes this scene's voice clip
+                sync = d / "voice_sync.wav"
+                vt.extract_audio(str(final), str(sync))
+                meta.update(voice_from_video=self.p.rel(sync), lipsync=True)
         elif kind.startswith("stock"):
             meta.update(self._stock(sc, d, raw, final, dur))
         elif kind in ("motion", "title_card"):
@@ -437,7 +564,7 @@ class Runner:
         if index <= 0:
             return None
         prev = plan["scenes"][index - 1]
-        if prev["visual"]["kind"].startswith("h3") and (self.p.dir / "scenes" / prev["id"] / "visual.mp4").exists():
+        if prev["visual"]["kind"] in ("h3_t2v", "h3_i2v") and (self.p.dir / "scenes" / prev["id"] / "visual.mp4").exists():
             return prev["id"]
         return None
 
@@ -549,6 +676,14 @@ class Runner:
         vclips, spans = [], []
         prev_end = -1.0
         for sc in plan["scenes"]:
+            sync = (assets.get(sc["id"]) or {}).get("voice_from_video")
+            if sync and (self.p.dir / sync).exists():  # on-camera line: speech comes from the lip-synced shot itself
+                at = tl["starts"][sc["id"]]
+                dd = ff.duration(self.p.dir / sync)
+                vclips.append({"path": str(self.p.dir / sync), "at": at, "gain_db": 0})
+                spans.append({"start": at + 0.2, "end": at + max(0.8, dd - 0.2), "text": sc["narration"], "scene": sc["id"]})
+                prev_end = max(prev_end, at + dd)
+                continue
             if sc["id"] in voice:
                 at = max(tl["starts"][sc["id"]] + 0.25, prev_end + 0.2)     # never overlap narration
                 prev_end = at + voice[sc["id"]]["duration"]
@@ -703,8 +838,12 @@ class Runner:
         md = [f"# {title}", "", (self.p.stage_data("proposal") or {}).get("logline", ""), "",
               f"- Pipeline: {self.pipe_name}", f"- QA: {qa_rep['status']}",
               f"- 預估成本: {d['cost'].get('estimated', 0):.2f} / 實際: {d['cost'].get('actual', 0):.2f} {settings().get('gpu.currency')}",
+              *(["", "## 演員 / Cast", *[f"- {a.name}（@{a.handle}）· {a.age} 歲 · AI 虛擬演員"
+                                          + ("，以真人肖像 / 聲音授權建立" if a.consent.real_person else "") for a in self.cast()]]
+                if self.brief.get("actors") else []),
               "", "## Credits", *[f"- {c}" for c in credits],
-              "", "## Models", "- Qwen3.8-Flash-Next · MiniMax H3 · VoxCPM2 · ACE-Step 1.5 · HunyuanVideo-Foley · Stable Audio Open"]
+              "", "## Models", "- Qwen3.8-Flash-Next · MiniMax H3 · VoxCPM2 · ACE-Step 1.5 · HunyuanVideo-Foley · Stable Audio Open"
+              + (" · Z-Image-Turbo" if self.brief.get("actors") else "")]
         if any(s["visual"]["kind"].startswith("h3") for s in (self.p.stage_data("scene_plan") or {}).get("scenes", [])):
             md.append("- 本片含 MiniMax H3 生成畫面：依 MiniMax H3 Community License 標示來源。")
         self.p.path("final", "README.md").write_text("\n".join(md), encoding="utf-8")

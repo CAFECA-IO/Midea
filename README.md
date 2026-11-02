@@ -11,6 +11,7 @@
 | 畫面音效 | **HunyuanVideo-Foley** | 依畫面內容生成同步的 Foley 音效與環境音（48 kHz） |
 | 文字音效 | **Stable Audio Open 1.0** | 轉場 whoosh、UI 音、環境音 |
 | 字幕對齊 | faster-whisper large-v3 | 字級時間戳記、參考影片轉錄 |
+| 演員定妝照 | **Z-Image-Turbo**（Apache-2.0，與 H3 共用 ComfyUI） | 虛擬演員的正面大頭照、四分之三側臉、側面、全身定裝 |
 
 > 音樂與音效模型是依需求補上的：ACE-Step 1.5 負責配樂，HunyuanVideo-Foley（影片→音效）與 Stable Audio Open（文字→音效）互補。三者都能在 24 GB 卡上跟其他模型輪流使用。
 
@@ -21,11 +22,25 @@
 3. **參考影片結構改編**：`--ref <Shorts/Reels/TikTok 連結>` 以 yt-dlp 下載，接著做切點偵測、抽關鍵影格、ASR，交給 Qwen 視覺分析，抽出節奏、鉤子、分段、字幕樣式這些「模板」，再套到新主題上。
 4. **動態圖形與角色動畫**：內建逐格決定性渲染引擎（Playwright + SVG／Canvas／three.js → FFmpeg），提供動態文字排版、圖表、儀表 KPI、神經網路圖、時間軸、路線地圖、**SVG 骨架角色**（idle／wave／walk／talk／point／jump，依旁白音量自動對嘴，可匯入自訂骨架），以及 **3D 產品轉台**（可載入 .glb）。
 
+## 虛擬演員（@ 指定演出）
+
+在看板左上角切到「演員陣容」建立擬真虛擬演員，製作影片時在描述中輸入 `@` 就能指定誰演出：
+
+- **完整設定**：姓名、@代號、年齡、性別、國籍、職業、外貌（族裔外觀、身高、體型、五官、髮型、眼睛、膚色、辨識特徵）、預設造型、個性、表演風格、背景故事、聲音。只要寫一句話（例如「32 歲台灣女記者，俐落短髮」），Qwen 就會補完整份設定，之後都能手動修改。
+- **定妝照**：Z-Image-Turbo 以同一個 seed 生成正面大頭照、四分之三側臉、側面、全身定裝。每張都可以單獨重生、設為主照；也可以整組重生，換一張臉。
+- **專屬聲音**：VoxCPM2 依年齡、性別與聲音描述設計出聲音並錄一段試音。之後這位演員的每一句台詞，都以這段試音做聲音複製，所以每支影片的聲音都一致。
+- **跨鏡頭、跨影片保持同一張臉**：分鏡中出現演員的鏡頭會自動改用 MiniMax H3 Ref2VA，並附上主照和全身定裝當參考圖（單鏡最多 4 位演員、9 張圖）。Qwen 會依演員的個性安排動作與台詞，`speaker` 欄位決定每一段由誰以自己的聲音說。
+- **演出作品**：演員頁會列出這位演員出現過的每支影片，包括角色（主演或配音）、出場鏡頭縮圖、台詞段數與製作狀態。點一下就能打開該專案。
+- **真人授權**：可以上傳真人照片或聲音樣本來建立演員，但上傳前必須勾選「已取得本人書面授權」並填寫授權來源。授權紀錄會保存在演員資料中，也會列在成片 README 的演員清單裡。
+- CLI：`midea actors new "一句話描述"`、`midea actors list`、`midea actors show @mei`，以及 `midea make "@mei 走訪台南老街的一天" --pipeline cinematic`。
+
+> 限制：H3 的參考影片模式不會對嘴到 VoxCPM2 的台詞，所以台詞以畫外音的方式呈現。分鏡規劃會盡量避免演員正對鏡頭說話的特寫。
+
 ## 特色
 
 - **即時分鏡看板（Approval Gates）**：`midea serve` → http://127.0.0.1:7788。看板即時呈現企劃、腳本、分鏡卡、生成素材、旁白試聽、預估與實際花費（GPU 秒 → kWh → 新台幣），並在**企劃／腳本／分鏡（含預估花費）／素材／發佈**這幾個節點暫停。可以逐鏡勾選重做、改提示詞、換一個真實素材候選，也能直接編修 JSON 後再核准。
 - **單卡 GPU 排程**：針對 24–48 GB 單卡設計。`h3` 會獨佔整張卡；其他服務在 VRAM 預算內共存，超出時依 LRU 卸載，閒置一段時間自動釋放。Qwen 的 MoE 專家層放在 CPU（`--n-cpu-moe`）。
-- **嚴謹自我審核**：12 條管線、137 種工具。輸出前一定會檢查以下項目，失敗的成片不會發佈：
+- **嚴謹自我審核**：12 條管線、146 種工具。輸出前一定會檢查以下項目，失敗的成片不會發佈：
 
   | 檢查 | 內容 |
   |---|---|
@@ -80,7 +95,8 @@ python -m midea services status                          # 查看 VRAM 配置
 
 - **MiniMax H3 Community License** 不涵蓋美國、歐盟、英國、南韓的使用與輸出；年營收 ≥ 2,000 萬美元的組織商用需要另外取得授權。成片 README 會自動附上標示。
 - 真實素材依各來源授權，片尾與 `final/README.md` 會列出出處。Archive.org 標示為 public domain 的素材仍建議人工確認。
-- VoxCPM2 聲音複製只能用於已取得授權的聲音。
+- VoxCPM2 聲音複製只能用於已取得授權的聲音；以真人照片或聲音建立演員時，系統會強制要求勾選授權聲明並保存紀錄。
+- Z-Image-Turbo 為 Apache-2.0 授權。
 - 視覺風格（`slate` 調色盤：石板藍底、琥珀色重點、薰衣草紫次要色）參考 `docs/style-reference.png`。
 
 ## 架構
@@ -90,9 +106,10 @@ midea/
   config.py  gpu/manager.py          設定、單卡 VRAM 排程（獨佔／共存／LRU／閒置卸載）
   providers/                         llm(Qwen) video_h3(ComfyUI) audio(VoxCPM2/ACE-Step/Foley/SFX) stock asr reference + mock
   servers/                           VoxCPM2、Stable Audio、Foley 的常駐 HTTP 服務
-  tools/                             137 種工具：video audio subtitles analysis generation motion_engine
+  tools/                             146 種工具：video audio subtitles analysis generation motion_engine
   motion/templates/                  14 個逐格渲染範本（SVG／Canvas／three.js）
   pipelines/runner.py                階段機：checkpoint、關卡、修訂迴圈、成本、QA、發佈
+  actors.py                          虛擬演員：設定、定妝照、聲音、@ 解析、演出作品
   qa.py  cost.py  project.py         自我審核、成本模型、專案儲存／事件
   web/                               FastAPI + SSE 分鏡看板
 pipeline_defs/*.yaml                 12 條管線定義（階段、關卡、風格預設）

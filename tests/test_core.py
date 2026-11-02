@@ -116,3 +116,60 @@ def test_h3_prompt_drops_text_inviting_style():
     from midea.pipelines.runner import _h3_prompt
     p = _h3_prompt("macro shot of neurons, no text", "slow dolly-in", "slate palette, kinetic typography, clean burned subtitles")
     assert "typography" not in p and "subtitles" not in p and "slate palette" in p and "dolly" in p
+
+
+# ---------------------------------------------------------------- virtual actors
+@pytest.fixture()
+def ws(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIDEA_WORKSPACE", str(tmp_path / "ws"))
+    return tmp_path / "ws"
+
+
+def test_actor_create_mentions_and_prompt(ws):
+    from midea import actors as AC
+    a = AC.create(AC.draft("30歲台灣女記者，幹練短髮"))
+    b = AC.create({**AC.draft("40歲男廚師"), "handle": "chef_wang", "name": "王大廚"})
+    assert a.handle and b.handle == "chef_wang"
+    assert AC.mentions(f"讓 @{a.handle} 採訪 @王大廚走進廚房") == [a.id, b.id]
+    assert AC.mentions("@nobody here") == []
+    p = AC.portrait_prompt(a, "full_body")
+    assert "year-old" in p and "full-body" in p and a.name not in p
+    dup = AC.create({**AC.draft("x"), "handle": a.handle})
+    assert dup.handle != a.handle                      # handles stay unique
+
+
+def test_actor_generation_and_filmography(ws):
+    from midea import actors as AC
+    from midea.pipelines.runner import Runner, cast_prompt
+    from midea.project import Project
+    a = AC.create(AC.draft("28歲女生，咖啡師"))
+    AC.generate_portraits(a.id)
+    AC.generate_voice(a.id)
+    a = AC.load(a.id)
+    assert {p.view for p in a.portraits} == set(AC.DEFAULT_VIEWS)
+    assert (AC.adir(a.id) / a.voice.sample).exists() and len(AC.ref_images(a)) == 2
+    prompt, refs = cast_prompt(f"@{a.handle} pours latte art, close-up", [a])
+    assert "<Picture 1>" in prompt and "@" not in prompt and len(refs) == 2
+    assert a.name not in prompt and a.name_en not in prompt          # names would be painted onto signage
+    p = Project.create({"prompt": f"@{a.handle} 介紹一杯好咖啡", "duration_s": 20, "music": False}, "cinematic")
+    r = Runner(p, auto_approve=True)
+    assert r.brief["actors"] == [a.id]
+    for st in ("proposal", "script", "scene_plan"):
+        r._run_stage(st)
+    plan = p.stage_data("scene_plan")
+    on = [s for s in plan["scenes"] if a.id in s.get("actors", [])]
+    assert on and all(s["visual"]["kind"] == "h3_r2v" for s in on)
+    films = AC.filmography(a.id)
+    assert films and films[0]["project"] == p.id and films[0]["role"] == "主演"
+
+
+def test_actor_upload_requires_consent(ws, tmp_path):
+    from midea import actors as AC
+    from midea.media import ff
+    a = AC.create(AC.draft("真人授權演員"))
+    img = tmp_path / "face.png"
+    ff.run(["-f", "lavfi", "-i", "color=c=gray:s=256x256:d=1", "-frames:v", "1", img])
+    with pytest.raises(PermissionError):
+        AC.add_upload(a.id, "portrait", img, consent=False)
+    a = AC.add_upload(a.id, "portrait", img, consent=True, note="授權書 #42")
+    assert a.consent.real_person and a.consent.attested and "portrait" in a.consent.scope

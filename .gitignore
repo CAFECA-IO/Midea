@@ -6,3 +6,4 @@ projects/
 .logs/
 .cache/
 .tmp_preview/
+Claude outputs/

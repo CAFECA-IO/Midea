@@ -82,7 +82,7 @@ services:
     model: ACE-Step 1.5 (acestep-v15-turbo)
     base_url: http://127.0.0.1:8783
     health: http://127.0.0.1:8783/health
-    vram_gb: 6
+    vram_gb: 16                  # 實測：turbo DiT + 5Hz LM 1.7B（vLLM 預留）約 16GB
     exclusive: false
     start: ACESTEP_API_HOST=127.0.0.1 ACESTEP_API_PORT=8783 ${UV:-uv} run acestep-api
     cwd: ${MIDEA_STACK:-~}/ACE-Step-1.5
@@ -114,6 +114,21 @@ services:
     model: large-v3
     in_process: true
     vram_gb: 4
+
+# ---- 虛擬演員定妝照（Z-Image-Turbo，Apache-2.0；與 H3 共用同一個 ComfyUI） ----------
+image:
+  service: h3                    # 透過哪個 ComfyUI 服務執行（租約 / 計費同 H3）
+  model: Z-Image-Turbo
+  unet: z_image_turbo_bf16.safetensors       # models/diffusion_models
+  text_encoder: qwen_3_4b.safetensors        # models/text_encoders
+  vae: ae.safetensors                        # models/vae
+  steps: 8
+  shift: 3
+
+actors:
+  refs_per_actor: 2              # 每位演員給 H3 Ref2VA 幾張參考照（正面大頭照 + 全身定裝）
+  max_per_shot: 4                # 單一鏡頭最多幾位演員（H3 參考圖上限 9 張）
+  lipsync: ${ACTORS_LIPSYNC:-true}   # 實驗：允許演員在畫面中親口說台詞（以 VoxCPM2 台詞音訊為 H3 <Audio 1> 參考）
 
 # ---- 開放/免費素材庫 ------------------------------------------------------
 stock:

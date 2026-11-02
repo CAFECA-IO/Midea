@@ -3,7 +3,7 @@
 # system Python or other users' services. Everything lives under $MIDEA_STACK.
 #
 #   MIDEA_STACK=/workspace/midea bash scripts/deploy_server.sh [step ...]
-#   steps: llama qwen comfy h3 audio voxcpm sfx whisper acestep foley  (default: all)
+#   steps: llama qwen comfy h3 zimage audio voxcpm sfx whisper acestep foley  (default: all)
 #
 # Each step is idempotent (marker files in $MIDEA_STACK/.done). Run inside tmux; total
 # download ≈ 200 GB. Ampere (RTX A6000 / sm_86) choices: INT8 "convrot" H3 weights and the
@@ -70,6 +70,18 @@ step_h3() {      # MiniMax H3 (FL2VA + Ref2VA, pruned INT8) + INT8 text encoder 
   done_ h3
 }
 
+step_zimage() {  # Z-Image-Turbo (Apache-2.0) for virtual-actor costume photos (~19 GB), same ComfyUI as H3
+  is_done zimage && return
+  M="$S/ComfyUI/models"
+  hfdl Comfy-Org/z_image_turbo --local-dir "$S/models/z_image_turbo" \
+              "split_files/diffusion_models/z_image_turbo_bf16.safetensors" \
+              "split_files/text_encoders/qwen_3_4b.safetensors" "split_files/vae/ae.safetensors"
+  for d in diffusion_models text_encoders vae; do
+    mkdir -p "$M/$d"; for f in "$S/models/z_image_turbo/split_files/$d"/*; do ln -sf "$f" "$M/$d/"; done
+  done
+  done_ zimage
+}
+
 step_audio() {   # shared venv for VoxCPM2 + SFX servers (torch cu126)
   is_done audio && return
   uv venv -q -p 3.12 "$S/venvs/audio"
@@ -125,7 +137,7 @@ step_foley() {   # HunyuanVideo-Foley XL (5.9 GB) in its own venv
 }
 
 STEPS=("$@")
-[ ${#STEPS[@]} -eq 0 ] && STEPS=(tools llama comfy audio whisper acestep foley voxcpm sfx h3 qwen)
+[ ${#STEPS[@]} -eq 0 ] && STEPS=(tools llama comfy audio whisper acestep foley voxcpm sfx h3 zimage qwen)
 step_tools
 for s in "${STEPS[@]}"; do echo "== $s start $(date +%T)"; "step_$s"; done
 echo "ALL DONE $(date)"

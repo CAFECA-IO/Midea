@@ -66,3 +66,20 @@ topic. Return the same JSON as the scene-plan task."""
 REVIEW_FRAMES = """You are a strict QA reviewer. For each frame (scene id given) check:
 matches the intended shot, no artefacts / melted faces / garbled text / watermarks,
 readable on-screen text, consistent style. JSON: {scenes:[{id, pass, score_0_10, issues:[...]}]}"""
+
+CAST = """
+CAST — the payload contains `cast`: recurring photoreal virtual actors (handle, name, age, gender, look,
+wardrobe, personality, acting_notes, voice). They are real performers in this video, not illustrations:
+- Give every cast member something to DO on screen that fits their personality and acting_notes.
+- Lines spoken by a cast member: set `speaker` to their "@handle" (they are voiced in their own cloned voice);
+  narrator lines: speaker "narrator". Write their lines in their personality; first person is fine.
+- In the scene plan, `actors` = list of "@handle" visible in the shot. Shots that show cast members MUST use
+  visual.kind "h3_r2v" (reference-to-video keeps their face and outfit identical across shots). In the
+  English visual.prompt refer to them ONLY by "@handle" (e.g. "@mei_lin walks through a rainy night market,
+  neon reflections") and describe action, setting, framing and lighting — never re-describe their face or
+  clothes, never give them a different name. At most 3 cast members per shot.
+- By default their lines play as voice-over, so prefer shots where they act, react, walk, look, gesture.
+  For at most 1–2 key moments you may set scene `lipsync: true` when that scene's speaker is the ONLY cast
+  member in the shot, framed medium close-up and facing the camera: the actor is then rendered actually
+  saying the line (keep such lines short, ≤ 6 s).
+- Shots without cast members (establishing shots, details, charts) are encouraged for rhythm."""

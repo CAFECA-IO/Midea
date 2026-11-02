@@ -169,14 +169,15 @@ class Service:
         raise TimeoutError(f"{self.name} did not become healthy; see {self.log_path}")
 
     def stop(self) -> None:
-        if self.adopted_pid:
-            log.info("stopping %s (adopted pid %d) to free %.1f GB", self.name, self.adopted_pid, self.vram)
+        pid = self.adopted_pid                 # local copy: another thread may stop the same service concurrently
+        if pid:
+            log.info("stopping %s (adopted pid %d) to free %.1f GB", self.name, pid, self.vram)
             for sig in (signal.SIGTERM, signal.SIGKILL):
                 with contextlib.suppress(ProcessLookupError, PermissionError):
-                    os.killpg(self.adopted_pid, sig)
+                    os.killpg(pid, sig)
                 for _ in range(30):
                     try:
-                        os.kill(self.adopted_pid, 0)
+                        os.kill(pid, 0)
                         time.sleep(1)
                     except OSError:
                         break
@@ -189,19 +190,27 @@ class Service:
         if self.external:
             log.warning("%s was started externally; leaving it running (stop it yourself to free VRAM)", self.name)
             return
-        if self.proc is None or self.proc.poll() is not None:
+        proc = self.proc
+        if proc is None or proc.poll() is not None:
             self.proc = None
             return
         log.info("stopping %s to free %.1f GB", self.name, self.vram)
         with contextlib.suppress(ProcessLookupError):
-            os.killpg(self.proc.pid, signal.SIGTERM)
+            os.killpg(proc.pid, signal.SIGTERM)
         try:
-            self.proc.wait(timeout=30)
+            proc.wait(timeout=30)
         except subprocess.TimeoutExpired:
             with contextlib.suppress(ProcessLookupError):
-                os.killpg(self.proc.pid, signal.SIGKILL)
+                os.killpg(proc.pid, signal.SIGKILL)
         self.proc = None
         self.pid_file.unlink(missing_ok=True)
+
+
+_billing = threading.local()
+
+
+class GPUBusy(RuntimeError):
+    """The GPU is held by other running leases right now — wait and retry."""
 
 
 @dataclass
@@ -243,7 +252,7 @@ class GPUScheduler:
         if target.exclusive:
             busy = [sv.name for sv in others if sv.leases > 0]
             if busy:
-                raise RuntimeError(f"{target.name} needs the whole GPU but {busy} are busy")
+                raise GPUBusy(f"{target.name} needs the whole GPU but {busy} are busy")
             for sv in others:
                 sv.stop()
             return
@@ -254,7 +263,7 @@ class GPUScheduler:
         while self.resident_gb() + target.vram > self.budget_gb and idle:
             idle.pop(0).stop()
         if self.resident_gb() + target.vram > self.budget_gb:
-            raise RuntimeError(f"not enough VRAM for {target.name} ({target.vram} GB); "
+            raise GPUBusy(f"not enough VRAM for {target.name} ({target.vram} GB); "
                                f"{self.resident_gb():.1f}/{self.budget_gb:.1f} GB in use by busy services")
 
     def own_pids(self) -> set[int]:
@@ -284,7 +293,16 @@ class GPUScheduler:
         while True:
             g = next((x for x in nvidia_smi() if x["index"] == idx), g)
             free = (g["total_mb"] - g["used_mb"]) / 1024
-            if free >= need or time.time() > deadline:
+            if free >= need:
+                break
+            # declared vram_gb can underestimate real usage: evict our own idle services (LRU) before giving up
+            idle = sorted((sv for sv in self.services.values() if sv is not target and sv.running and sv.leases == 0
+                           and not sv.external and not sv.in_process), key=lambda s: s.last_used)
+            if idle:
+                idle[0].stop()
+                deadline = time.time() + 30
+                continue
+            if time.time() > deadline:
                 break
             time.sleep(2)
         if free < need:
@@ -297,13 +315,25 @@ class GPUScheduler:
     @contextlib.contextmanager
     def lease(self, name: str) -> Iterator[Service]:
         sv = self.services[name]
-        with self.lock:
-            if not settings().mocked(name) and not sv.running:
-                self._make_room(sv)
-                if not sv.healthy(1.0):
-                    self._check_physical(sv)
-                sv.start()
-            sv.leases += 1
+        deadline = time.time() + float(settings().get("gpu.wait_s", 7200))
+        waited = False
+        while True:                                # queue behind busy services instead of failing
+            try:
+                with self.lock:
+                    if not settings().mocked(name) and not sv.running:
+                        self._make_room(sv)
+                        if not sv.healthy(1.0):
+                            self._check_physical(sv)
+                        sv.start()
+                    sv.leases += 1
+                break
+            except GPUBusy as e:
+                if time.time() > deadline:
+                    raise
+                if not waited:
+                    log.info("%s waiting for the GPU: %s", name, e)
+                    waited = True
+                time.sleep(2)
         t0 = time.time()
         try:
             yield sv
@@ -313,8 +343,19 @@ class GPUScheduler:
                 sv.leases -= 1
                 sv.last_used = time.time()
                 sv.gpu_seconds += dt
-            if self.on_usage:
-                self.on_usage(name, dt)
+            bill = getattr(_billing, "fn", None) or self.on_usage
+            if bill:
+                bill(name, dt)
+
+    @contextlib.contextmanager
+    def billing(self, fn: Callable[[str, float], None]) -> Iterator[None]:
+        """Bill GPU time leased by *this thread* to `fn` (each project / actor job pays for its own work)."""
+        prev = getattr(_billing, "fn", None)
+        _billing.fn = fn
+        try:
+            yield
+        finally:
+            _billing.fn = prev
 
     def unload_idle(self) -> list[str]:
         ttl = float(settings().get("gpu.idle_unload_s", 600))

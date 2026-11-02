@@ -31,6 +31,7 @@ class Brief(_M):
     subtitles: bool = True
     burn_subtitles: bool = True
     user_media: list[str] = Field(default_factory=list)
+    actors: list[str] = Field(default_factory=list)   # 虛擬演員 id（由 @handle 解析）
 
 
 class Proposal(_M):
@@ -78,6 +79,7 @@ class ScriptSection(_M):
     narration: str
     on_screen_text: str = ""
     est_duration_s: float = 8
+    speaker: str = ""                       # "@handle" = 該演員以自己的聲音說這段；空 / narrator = 旁白
 
 
 class Script(_M):
@@ -127,6 +129,16 @@ class Scene(_M):
     sfx: list[SFX] = Field(default_factory=list)
     foley: bool = False
     music_cue: str = ""
+    actors: list[str] = Field(default_factory=list)   # 畫面中出現的演員（@handle → 由 runner 轉為 id）
+    speaker: str = ""                                  # 誰說這段 narration（@handle 或 narrator）
+    lipsync: bool = False                              # 實驗：演員在畫面中親口說台詞（H3 以台詞音訊為 <Audio 1> 參考對嘴）
+
+    @field_validator("actors", mode="before")
+    @classmethod
+    def _actors(cls, v):
+        if isinstance(v, str):
+            return [x for x in v.replace("，", ",").split(",") if x.strip()]
+        return [str(x.get("handle") or x.get("name") or "") if isinstance(x, dict) else str(x) for x in (v or [])]
 
     @field_validator("foley", mode="before")
     @classmethod

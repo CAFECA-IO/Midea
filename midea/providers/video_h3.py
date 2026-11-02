@@ -73,7 +73,7 @@ class H3:
 
     def generate(self, prompt: str, out: Path, *, seconds: int = 6, aspect: str = "16:9",
                  mode: str = "t2v", first_frame: str | None = None, last_frame: str | None = None,
-                 ref_images: list[str] | None = None, seed: int | None = None,
+                 ref_images: list[str] | None = None, ref_audios: list[str] | None = None, seed: int | None = None,
                  negative: str = "blurry, low quality, watermark, text artifacts, deformed hands, flicker") -> Path:
         out = Path(out)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -105,6 +105,7 @@ class H3:
                 values["LAST_FRAME"] = self._upload(client, last_frame)
             for i, ref in enumerate((ref_images or [])[:9], 1):
                 values[f"REF_IMAGE_{i}"] = self._upload(client, ref)
+            audios = [self._upload(client, a) for a in (ref_audios or [])[:3]]
             if builtin:                                # graphs mirroring the official H3 templates
                 from . import h3_graph
                 models = self.cfg.get("models") or {}
@@ -112,7 +113,7 @@ class H3:
                 if mode == "r2v":
                     refs = [values[k] for k in sorted(values) if k.startswith("REF_IMAGE_")]
                     workflow = h3_graph.ref2va(models, prompt=prompt, width=w, height=h, seconds=seconds, seed=seed,
-                                               refs=refs, steps=self.defaults.get("r2v_steps"))
+                                               refs=refs, steps=self.defaults.get("r2v_steps"), audios=audios)
                 else:
                     workflow = h3_graph.fl2va(models, prompt=prompt, width=w, height=h, seconds=seconds, seed=seed,
                                               steps=steps, first_frame=values.get("FIRST_FRAME"),

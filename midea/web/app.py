@@ -10,10 +10,11 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
+from .. import actors as AC
 from ..config import settings
 from ..gpu import scheduler
 from ..pipelines import load_defs, route, run_async
@@ -59,6 +60,7 @@ class NewProject(BaseModel):
     music: bool = True
     subtitles: bool = True
     auto_approve: bool = False
+    actors: list[str] = []          # 額外指定的演員（prompt 中的 @handle 也會自動解析）
 
 
 class GateDecision(BaseModel):
@@ -111,6 +113,7 @@ def projects() -> list[dict]:
 @app.post("/api/projects")
 def create(req: NewProject) -> dict:
     brief = req.model_dump(exclude={"auto_approve"})
+    brief["actors"] = AC.resolve_list(req.actors + AC.mentions(req.prompt))
     if req.aspect:
         brief["aspect_locked"] = True
     else:
@@ -147,6 +150,12 @@ def project(pid: str) -> dict:
     comp.pop("words", None)
     for o in comp.get("outputs", []):
         o.pop("words", None)
+    d["cast"] = []
+    for aid in d.get("brief", {}).get("actors") or []:
+        try:
+            d["cast"].append(AC.summary(AC.load(aid)))
+        except KeyError:
+            d["cast"].append({"id": aid, "missing": True})
     d["running"] = pid in _runs and _runs[pid].is_alive()
     d["stages_order"] = load_defs().get(d["pipeline"], {}).get("stages", [])
     d["gates_order"] = load_defs().get(d["pipeline"], {}).get("gates", [])
@@ -226,3 +235,129 @@ async def events(pid: str) -> StreamingResponse:
         finally:
             _subs[pid].remove(q)
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------- virtual actors
+class ActorDraft(BaseModel):
+    idea: str
+    language: str = "zh-TW"
+
+
+class ActorGen(BaseModel):
+    views: list[str] | None = None
+    reseed: bool = False
+    text: str | None = None
+
+
+def _actor(aid: str) -> AC.Actor:
+    try:
+        return AC.load(aid)
+    except KeyError:
+        raise HTTPException(404, "actor not found") from None
+
+
+def _actor_full(a: AC.Actor) -> dict:
+    d = a.model_dump()
+    d["films"] = AC.filmography(a.id)
+    d["views"] = {k: v["zh"] for k, v in AC.VIEWS.items()}
+    d["voice_prompt"] = AC.voice_prompt(a)
+    d["portrait_prompt"] = AC.portrait_prompt(a, a.primary if a.primary in AC.VIEWS else "headshot")
+    return d
+
+
+@app.get("/api/actors")
+def actors_list() -> list[dict]:
+    return [AC.summary(a, AC.filmography(a.id)) for a in AC.list_all()]
+
+
+@app.post("/api/actors/draft")
+def actors_draft(req: ActorDraft) -> dict:
+    return AC.draft(req.idea, req.language)
+
+
+@app.post("/api/actors")
+def actors_create(body: dict) -> dict:
+    gen = body.pop("generate", True)
+    consent = body.pop("consent", None)
+    try:
+        a = AC.create(body)
+    except Exception as e:  # noqa: BLE001 — pydantic validation
+        raise HTTPException(400, str(e)[:800]) from None
+    if consent:
+        AC.update(a.id, lambda x: setattr(x, "consent", AC.Consent(**consent)))
+    if gen:
+        AC.run_job(a.id, "portraits")
+        AC.run_job(a.id, "voice")
+    return _actor_full(AC.load(a.id))
+
+
+@app.get("/api/actors/{aid}")
+def actors_get(aid: str) -> dict:
+    return _actor_full(_actor(aid))
+
+
+@app.put("/api/actors/{aid}")
+def actors_edit(aid: str, body: dict) -> dict:
+    _actor(aid)
+    try:
+        return _actor_full(AC.edit(aid, body))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, str(e)[:800]) from None
+
+
+@app.delete("/api/actors/{aid}")
+def actors_delete(aid: str) -> dict:
+    _actor(aid)
+    AC.delete(aid)
+    return {"ok": True}
+
+
+@app.post("/api/actors/{aid}/portraits")
+def actors_portraits(aid: str, req: ActorGen) -> dict:
+    _actor(aid)
+    return {"started": AC.run_job(aid, "portraits", views=req.views, reseed=req.reseed)}
+
+
+@app.post("/api/actors/{aid}/voice")
+def actors_voice(aid: str, req: ActorGen) -> dict:
+    _actor(aid)
+    return {"started": AC.run_job(aid, "voice", text=req.text)}
+
+
+@app.post("/api/actors/{aid}/primary/{view}")
+def actors_primary(aid: str, view: str) -> dict:
+    _actor(aid)
+    return _actor_full(AC.edit(aid, {"primary": view}))
+
+
+@app.post("/api/actors/{aid}/upload")
+async def actors_upload(aid: str, kind: str = Form(...), consent: bool = Form(False), note: str = Form(""),
+                        view: str = Form("headshot"), transcript: str = Form(""), file: UploadFile = File(...)) -> dict:
+    _actor(aid)
+    tmp = AC.adir(aid) / "uploads"
+    tmp.mkdir(parents=True, exist_ok=True)
+    dst = tmp / f"{uuid.uuid4().hex[:6]}_{Path(file.filename or 'upload').name}"
+    with open(dst, "wb") as fh:
+        shutil.copyfileobj(file.file, fh)
+    try:
+        a = AC.add_upload(aid, kind, dst, consent=consent, note=note, view=view if view in AC.VIEWS else "headshot",
+                          transcript=transcript)
+    except PermissionError as e:
+        dst.unlink(missing_ok=True)
+        raise HTTPException(403, str(e)) from None
+    except ValueError as e:
+        dst.unlink(missing_ok=True)
+        raise HTTPException(400, str(e)) from None
+    return _actor_full(a)
+
+
+@app.get("/actor-files/{aid}/{path:path}")
+def actor_files(aid: str, path: str) -> FileResponse:
+    try:
+        base = AC.adir(aid).resolve()
+    except KeyError:
+        raise HTTPException(404) from None
+    f = (base / path).resolve()
+    if base not in f.parents or not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f)

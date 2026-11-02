@@ -60,6 +60,12 @@ def _t_script(brief: dict, ctx: dict) -> dict:
         narration = (base * 3)[:n].rstrip("，、") + "。"
         secs.append({"id": f"s{i+1}", "heading": beat, "narration": narration,
                      "on_screen_text": beat, "est_duration_s": round(per, 2)})
+    cast = ctx.get("cast") or []
+    for i, sec in enumerate(secs):                     # cast members take every other section in their own voice
+        if cast and i % 2 == 1:
+            sec["speaker"] = cast[(i // 2) % len(cast)]["handle"]
+        else:
+            sec["speaker"] = "narrator"
     return {"title": topic, "language": brief.get("language", "zh-TW"), "hook": secs[0]["narration"],
             "sections": secs, "cta": "追蹤我們，看更多一分鐘科普。"}
 
@@ -92,6 +98,15 @@ def _t_scene_plan(brief: dict, ctx: dict) -> dict:
                 visual = {"kind": "h3_t2v", "camera": "slow dolly-in",
                           "prompt": f"Cinematic shot illustrating {sec.get('heading','')}, soft volumetric light, "
                                     f"clean modern aesthetic, shallow depth of field"}
+            cast = ctx.get("cast") or []
+            actors = []
+            if cast and not real and not motion_only and visual["kind"].startswith("h3"):
+                lead = cast[k % len(cast)]["handle"]
+                actors = [lead]
+                visual = {"kind": "h3_r2v", "camera": "slow tracking shot",
+                          "prompt": f"{lead} walks through a sunlit modern office, glancing at a glowing screen, medium shot"}
+            elif cast and motion_only and k % 4 == 2:
+                actors = [cast[0]["handle"]]
             if visual["kind"].startswith("h3"):
                 d = float(max(4, min(15, round(d))))
             scenes.append({"id": f"sc{k:02d}", "section_id": sec.get("id"), "duration_s": d,
@@ -100,7 +115,8 @@ def _t_scene_plan(brief: dict, ctx: dict) -> dict:
                            "transition": {"type": "dissolve" if k > 1 else "fade", "duration": 0.4},
                            "sfx": [{"prompt": "soft whoosh transition", "at": 0.0, "duration": 1.0, "gain_db": -12}]
                            if j == 0 and k > 1 else [],
-                           "foley": visual["kind"] == "stock_video", "music_cue": ""})
+                           "foley": visual["kind"] == "stock_video", "music_cue": "",
+                           "actors": actors, "speaker": sec.get("speaker", "")})
     return {"scenes": scenes,
             "music": {"prompt": prop.get("music_mood", "ambient"), "bpm": 96, "instrumental": True},
             "voice": {"description": "(warm, clear documentary narrator)"}}

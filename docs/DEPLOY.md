@@ -44,7 +44,7 @@ tmux attach -t midea-board              # 看板（Ctrl-b d 離開）
 tail -f /workspace/midea/logs/install.log
 cd /workspace/midea/app && ../venv/bin/python -m midea doctor
 cd /workspace/midea/app && ../venv/bin/python -m midea services status
-MIDEA_STACK=/workspace/midea bash app/scripts/deploy_server.sh <step>   # 重跑某一步：tools llama comfy audio whisper acestep foley voxcpm sfx h3 qwen
+MIDEA_STACK=/workspace/midea bash app/scripts/deploy_server.sh <step>   # 重跑某一步：tools llama comfy audio whisper acestep foley voxcpm sfx h3 zimage qwen
 ```
 
 ## 接 Strata 的 Qwen（app/.env）
@@ -99,3 +99,26 @@ Strata 用 `strata-iq3_s-local.json` 啟動時，會把專家快取塞滿 GPU，
 - 預設約 0.6MP（16:9 時為 1024×576），可用 `H3_MEGAPIXELS` 調整。
 - Foley 用 XL（5.9GB）並開啟 `--enable_offload`。
 - Stable Audio Open 需要授權（gated）：要先 `hf auth login` 並在 Hugging Face 接受授權條款。沒做之前會自動改用 AudioLDM2。
+
+## 虛擬演員（Z-Image-Turbo + H3 Ref2VA + VoxCPM2）
+
+- 權重：`deploy_server.sh zimage` 會從 `Comfy-Org/z_image_turbo` 下載三個檔案，共約 19GB，並連結到 `ComfyUI/models`：
+  - `diffusion_models/z_image_turbo_bf16.safetensors`
+  - `text_encoders/qwen_3_4b.safetensors`
+  - `vae/ae.safetensors`
+- 定妝照透過 `h3` 服務，跑在同一個 ComfyUI（8781）。租約與計費都算在 `h3`；費用記到演員自己的 `cost`，不會算進當時正在跑的專案。
+- 演員資料放在 `$MIDEA_WORKSPACE/_actors/<id>/`，包含：
+  - `actor.json`
+  - `portraits/`（舊照片會移到 `portraits/archive/`）
+  - `voice/`
+  - `uploads/`（真人授權素材）
+- 演員的生成工作一次只跑一件。GPU 租約遇到忙碌時會排隊等待（`gpu.wait_s`，預設 2 小時），不會直接失敗。VoxCPM2 伺服器內部也會把請求串行化，因為同時呼叫 `generate()` 會讓 KV 快取錯亂。
+- 實測（2026-11-02）：
+  - Z-Image-Turbo 每張 1024² 約 6 秒；ComfyUI 冷啟動加上載入約 40 秒。一位演員的 4 張定妝照加試音約 1 分鐘。
+  - H3 Ref2VA（4 步 turbo，1024×576）每個 5–7 秒鏡頭約 2.5–3 分鐘，比 FL2VA 8 步快。
+  - 測試片「巷口的第一道光」（專案 `20261102-185536-3536da`）：
+    - 長度 25.7 秒，共 5 鏡，其中 4 鏡用 Ref2VA，雙人同框 1 鏡，演員親口說台詞 1 鏡。
+    - QA 全數通過，GPU 電費 0.64 TWD。
+    - 當時 Strata 未執行，企劃、腳本、分鏡是手寫後直接寫入 checkpoint。
+- 提示詞**不放演員姓名**，只用 `<Picture i>` 指稱。實測放了英文名，H3 會把名字畫在店門玻璃上。
+- 親口說台詞（`lipsync`）的做法：把 VoxCPM2 生成的該句台詞當成 H3 的 `<Audio 1>` 參考。H3 生成的影片會帶對嘴與語音，這段語音直接當作該鏡的人聲。實測 Whisper 能正確辨識出原句。可用 `ACTORS_LIPSYNC=false` 關閉。
