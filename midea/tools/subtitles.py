@@ -51,8 +51,9 @@ def split_text(text: str, max_chars: int | None = None) -> list[str]:
     chunks: list[str] = []
     cur = ""
     for p in pieces:
-        if len(cur + p) <= max_chars:
-            cur += p
+        sep = "" if (not cur or is_cjk(cur + p)) else " "            # latin pieces keep their word space
+        if len(cur + sep + p) <= max_chars:
+            cur += sep + p
             continue
         if cur:
             chunks.append(cur)
@@ -209,7 +210,7 @@ ASS_STYLES = {
 
 @tool("subtitle.write_ass", "subtitle", tags=["styling"])
 def write_ass(cues: Sequence[dict], out: str, w: int = 1920, h: int = 1080, style: str = "clean",
-              font: str | None = None, karaoke: bool = False) -> str:
+              font: str | None = None, karaoke: bool = False, extra: Sequence[str] | None = None) -> str:
     """Styled ASS subtitles (clean / boxed / shorts / documentary); karaoke=True highlights word-by-word."""
     from .motion_engine import default_font_name
     s = ASS_STYLES.get(style, ASS_STYLES["clean"])
@@ -224,6 +225,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,{font or default_font_name()},{fs},{s['primary']},&H0000D7FF,{s['outline']},{s['back']},{s['bold']},0,0,0,100,100,0,0,{s['border']},{s['ol']},{s['sh']},2,{int(w*0.06)},{int(w*0.06)},{int(h*s['mv'])},1
+Style: Super,{font or default_font_name()},{int(min(w, h) * 0.062)},&H00FFFFFF,&H0000D7FF,&H00101010,&H64000000,1,0,0,0,100,100,1,0,1,{max(2, int(min(w, h) * 0.003))},2,8,{int(w*0.07)},{int(w*0.07)},{int(h*0.08)},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -236,6 +238,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             dur_cs = max(1, int((c["end"] - c["start"]) * 100 / max(1, len(toks))))
             txt = ("" if is_cjk(txt) else " ").join(f"{{\\kf{dur_cs}}}{t}" for t in toks)
         ev.append(f"Dialogue: 0,{_fmt(c['start'], '.')[:-1]},{_fmt(c['end'], '.')[:-1]},Default,,0,0,0,,{txt}")
+    ev += list(extra or [])                       # e.g. on-screen supers (Style: Super, top centre)
     Path(out).write_text(header + "\n".join(ev) + "\n", encoding="utf-8")
     return out
 

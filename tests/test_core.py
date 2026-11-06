@@ -24,9 +24,9 @@ def test_registry_has_100_plus_tools():
     assert {"video", "audio", "subtitle", "motion", "generate", "stock", "analysis", "reference"} <= {t.category for t in tools.values()}
 
 
-def test_twelve_pipelines_and_gates():
+def test_pipelines_and_gates():
     defs = load_defs()
-    assert len(defs) == 12
+    assert len(defs) == 13 and "ad-60" in defs
     for name, d in defs.items():
         assert set(d["gates"]) <= set(d["stages"]), name
         assert d["stages"][-1] == "publish" and "qa" in d["stages"], name
@@ -209,3 +209,32 @@ def test_cer_normalises_script_and_punctuation():
     assert _cer("Hello there, friend.", "hello there friend") == 0.0
     assert _cer("the quick brown fox", "the quick red fox") == 0.25   # English: word level
     assert _cer("我是林予晴", "我是林雨晴") == 0.0             # homophone in a name is not a speech error
+
+
+# ---------------------------------------------------------------- ads
+def test_product_parse_and_grounded_facts(ws, tmp_path):
+    from midea.providers import product as PR
+    d = PR.ingest("mock:shirt", tmp_path / "product")
+    assert d["name"] == "Travel shirt" and d["images"]
+    assert d["price"]["display"] is False and "示範" in d["price"]["reason"]      # demo prices never reach the ad
+    ft = d["fact_table"]
+    assert ft["product_type"] == "wearable" and any(f["kind"] == "observed" for f in ft["facts"])
+
+
+def test_ad_claims_check():
+    from midea.pipelines.ad import claims_check
+    ft = {"facts": [{"id": "f1", "fact": "easy-care shirt for travel", "source": "An easy-care shirt"}]}
+    ok = {"headline": "Made for busy days", "claims": [{"text": "easy-care", "fact_ids": ["f1"]}]}
+    assert not [f for f in claims_check(ok, ft, [], {"price": {"display": False}}) if f["level"] == "error"]
+    bad = {"headline": "Wrinkle-free, 100% guaranteed", "sub": "Only HK$89", "claims": [{"text": "breathable", "fact_ids": ["f9"]}]}
+    msgs = " ".join(f["message"] for f in claims_check(bad, ft, ["cheap"], {"price": {"display": False}}))
+    assert "沒有對應" in msgs and "100%" in msgs and "價格" in msgs
+
+
+def test_ad_timing_helpers():
+    from midea.pipelines.ad import _fit_total, _split_like
+    shots = [{"id": f"s{i}", "duration": 5, "kind": "shot"} for i in range(10)]
+    _fit_total(shots, 60)
+    assert shots[-1]["kind"] == "endcard" and abs(sum(s["duration"] for s in shots) - 60) < 0.01
+    parts = _split_like("輕鬆打理，適合旅行與城市日常。", ["Easy care,", "for travel and city days."])
+    assert len(parts) == 2 and "".join(parts).replace("，", "") .startswith("輕鬆打理")

@@ -63,7 +63,11 @@ def check_delivery(src: str, promise: dict, has_subs: bool) -> dict:
     d, target = p["duration"], float(promise.get("duration_s", 0) or 0)
     d_prog = d - float(promise.get("extra_s", 0) or 0)       # e.g. end-credits are not part of the promised runtime
     errs, warns = [], []
-    if target:
+    tol = promise.get("tolerance_s")
+    if target and tol is not None:                # strict deliveries (ads): an absolute tolerance in seconds
+        if abs(d_prog - target) > float(tol):
+            errs.append(f"duration {d_prog:.2f}s vs {target:.1f}s (±{float(tol):.1f}s required)")
+    elif target:
         dev = abs(d_prog - target) / target
         (errs if dev > 0.10 else warns if dev > 0.05 else []).append(f"duration {d_prog:.1f}s vs promised {target:.0f}s ({dev:.0%})")
     asp = analysis.aspect(src)
@@ -139,7 +143,9 @@ def check_subtitles(cues: list[dict], narration_spans: list[dict], words: list[d
     q = settings().get("qa", {}) or {}
     issues, warns = [], []
     for i, c in enumerate(cues):
-        text = c["text"].replace("\n", "")
+        lines = c["text"].split("\n")
+        # bilingual cues: reading speed is judged on the spoken language (first line); the translation rides along
+        text = lines[0] if c.get("bilingual") else c["text"].replace("\n", "")
         max_line, max_cps = subs.limits(text)
         dur = c["end"] - c["start"]
         units = len(re.sub(r"\s", "", text)) if subs.is_cjk(text) else len(text)
@@ -150,7 +156,7 @@ def check_subtitles(cues: list[dict], narration_spans: list[dict], words: list[d
             issues.append(f"#{i+1} {cps:.1f} cps > {max_cps}")
         elif cps > max_cps:
             warns.append(f"#{i+1} {cps:.1f} cps")
-        if any(len(line) > max_line for line in c["text"].split("\n")):
+        if any(len(line) > subs.limits(line)[0] for line in lines):
             issues.append(f"#{i+1} line > {max_line} chars")
         if i and c["start"] < cues[i - 1]["end"] - 0.01:
             issues.append(f"#{i+1} overlaps previous")

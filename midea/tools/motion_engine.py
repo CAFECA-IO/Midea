@@ -63,14 +63,14 @@ def fonts_dir() -> str:
     return str(Path(default_font()).parent)
 
 
-def _html(template: str, params: dict, w: int, h: int, palette: str) -> str:
+def _html(template: str, params: dict, w: int, h: int, palette: str | dict) -> str:
     src = (TPL_DIR / f"{template}.html").read_text(encoding="utf-8")
     lib = (TPL_DIR / "_lib.js").read_text(encoding="utf-8")
     three = VENDOR / "three.module.js"
     three_url = three.as_uri() if three.exists() else "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
     addons = VENDOR / "addons"
     addons_url = addons.as_uri() + "/" if addons.exists() else "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-    pal = PALETTES.get(palette, PALETTES["slate"])
+    pal = {**PALETTES["slate"], **palette} if isinstance(palette, dict) else PALETTES.get(palette, PALETTES["slate"])
     return (src.replace("/*LIB*/", lib)
                .replace("__PARAMS__", json.dumps(params, ensure_ascii=False))
                .replace("__PALETTE__", json.dumps(pal))
@@ -204,7 +204,7 @@ def normalize_params(template: str, params: dict) -> dict:
 
 
 def render(template: str, out: str | Path, *, seconds: float, w: int = 1920, h: int = 1080, fps: int = 24,
-           params: dict | None = None, palette: str = "slate", audio: str | None = None) -> str:
+           params: dict | None = None, palette: str | dict = "slate", audio: str | None = None) -> str:
     from playwright.sync_api import sync_playwright
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -282,6 +282,8 @@ TEMPLATES = {
     "gauge": "KPI ring gauge with counting number and amber arc, optional sub-metrics (params: value, max, label, unit, items=[{label,value}]).",
     "kpi_board": "Dashboard-style KPI board: big numbers, YoY deltas, paired progress bars (params: title, items=[{label,value,unit,delta,bar}]).",
     "end_card": "End card with call-to-action (params: title, text).",
+    "ad_endcard": "Ad pack shot: product cut-out, headline, CTA pill, brand, logo and URL; adapts to 16:9 / 9:16 / 1:1 "
+                  "(params: product_img, logo_img, brand, headline, sub, cta, url).",
 }
 for _n, _s in TEMPLATES.items():
     _motion_tool(_n, _s, tags=["motion"])

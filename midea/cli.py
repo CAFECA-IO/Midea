@@ -39,7 +39,8 @@ def cmd_make(a: argparse.Namespace) -> None:
     print(f"專案 {p.id}  pipeline={pipe}\n資料夾 {p.dir}")
     if not a.yes:
         print("關卡會暫停等待核准：另開終端執行 `midea serve` 用看板核准，或 `midea approve <project> <gate>`")
-    Runner(p, auto_approve=a.yes).run()
+    from .pipelines import runner_for
+    runner_for(p, auto_approve=a.yes).run()
     d = p.load()
     print(json.dumps({"status": d["status"], "deliverables": d.get("deliverables"), "cost": d["cost"]["actual"]},
                      ensure_ascii=False, indent=1))

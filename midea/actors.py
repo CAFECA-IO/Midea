@@ -867,11 +867,20 @@ def ensure_ready(a: Actor, *, need_portraits: bool = False, need_voice: bool = F
         if missing:
             a = generate_turnaround(a.id, [v for v in missing if v in TURN_VIEWS])
     if need_voice and not (a.voice.source == "uploaded"):
-        ref = voice_ref(a, lang)
         stale = a.voice.mock and not settings().mocked("voxcpm")
-        if not ref or stale:
-            a = generate_voice(a.id, lang=lang if lang and not voice_ref(a, lang) else None)
+        if not voice_ref(a) or stale:
+            a = generate_voice(a.id)
+        if lang and not has_voice(a, lang):          # e.g. an English ad: clone the actor's voice into English
+            a = generate_voice(a.id, lang=lang)
     return a
+
+
+def has_voice(a: Actor, lang: str) -> bool:
+    """A canonical sample exists for this language (the primary language counts)."""
+    l2 = lang.split("-")[0].lower()
+    if (a.voice.language or "zh-TW").split("-")[0].lower() == l2 and a.voice.sample:
+        return True
+    return any(k.split("-")[0].lower() == l2 and (adir(a.id) / v.get("file", "")).is_file() for k, v in (a.voice.samples or {}).items())
 
 
 # ---------------------------------------------------------------- uploads (real people need consent)

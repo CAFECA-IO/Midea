@@ -1,0 +1,36 @@
+name: ad-60
+title: 60 秒廣告
+feature: ad
+description: 選定演員與商品網址，自動產出商品事實表、商品定裝、三個創意方向（含動態預覽）、廣告文案與腳本大綱、鏡頭語言與關鍵分鏡，再生成 60 秒與 15 秒、16:9／9:16／1:1 共六支廣告影片。
+defaults:
+  aspect: '16:9'
+  pacing: [2, 7]
+  visual_kinds: [h3_i2v, motion]
+  continuity: false
+  grade: neutral
+  subtitle_style: boxed
+  music: true
+  foley: false
+  palette: slate
+stages:
+- product
+- tryon
+- concepts
+- copy
+- storyboard
+- voice
+- assets
+- music_sfx
+- edit
+- compose
+- versions
+- qa
+- publish
+gates:
+- product
+- tryon
+- concepts
+- copy
+- storyboard
+- assets
+- publish

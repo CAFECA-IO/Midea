@@ -100,13 +100,13 @@ def _h3_prompt(prompt: str, camera: str, style: str) -> str:
 CAST_PROMPT_VERSION = 2       # bump when cast_prompt changes so cached actor shots are regenerated
 
 
-def cast_prompt(body: str, cast: list, per_actor: int = 3) -> tuple[str, list[str]]:
+def cast_prompt(body: str, cast: list, per_actor: int = 3, refs_for: Callable | None = None) -> tuple[str, list[str]]:
     """Ref2VA prompt: bind each actor to their reference pictures and refer to them only through those
     tags. Names are never put in the prompt: video models paint them onto signs and walls."""
     refs: list[str] = []
     binds = []
     for a in cast:
-        imgs = AC.ref_images(a)[:max(1, per_actor)]
+        imgs = (refs_for(a) if refs_for else AC.ref_images(a))[:max(1, per_actor)]
         if len(refs) + len(imgs) > 9:
             imgs = imgs[: 9 - len(refs)]
         if not imgs:
@@ -162,6 +162,25 @@ class Runner:
             d["cost"]["actual"] = round(d["cost"].get("actual", 0) + c, 4)
             d["cost"]["lines"].append({"service": service, "gpu_s": round(seconds, 1), "cost": c})
         self.p.update(f)
+
+    # ------------------------------------------------------------------ versions (same edit/compose code, other inputs)
+    _tag = ""                                      # suffix for edit/compose outputs ("" = the main master)
+    _override: dict = {}                           # stage data replacements while rendering a version
+
+    def _sd(self, stage: str, default: Any = None) -> Any:
+        return self._override[stage] if stage in self._override else self.p.stage_data(stage, default)
+
+    def _t(self, name: str) -> str:
+        if not self._tag:
+            return name
+        stem, dot, ext = name.rpartition(".")
+        return f"{stem}_{self._tag}.{ext}"
+
+    def _post_cues(self, cues: list[dict], spans: list[dict]) -> list[dict]:   # hook: e.g. bilingual subtitles
+        return cues
+
+    def _ass_extra(self, total: float) -> list[str]:                           # hook: extra ASS events (supers)
+        return []
 
     # ------------------------------------------------------------------ cast
     def cast(self) -> list[AC.Actor]:
@@ -265,8 +284,9 @@ class Runner:
                 self.p.checkpoint(stage, data)
                 return
             feedback = rec.get("note", "") or "請重新製作，提升品質。"
-            if stage == "assets" and rec.get("edits", {}).get("regenerate"):
-                feedback = ""            # targeted regeneration handled in _apply_edits
+            targeted = rec.get("edits") or {}
+            if any(targeted.get(k) for k in ("regenerate", "redo", "redraw")):
+                feedback = ""            # targeted regeneration handled in _apply_edits (notes travel with the edits)
         raise RuntimeError(f"{stage} rejected {MAX_REVISIONS + 1} times; stopping")
 
     def _apply_edits(self, stage: str, data: Any, edits: dict) -> Any:
@@ -646,23 +666,23 @@ class Runner:
     def st_edit(self, feedback: str) -> dict:
         if self.pipe_name == "clip-factory":
             return self._clip_edit()
-        plan = self.p.stage_data("scene_plan")
-        assets = self.p.stage_data("assets")["scenes"]
-        voice = (self.p.stage_data("voice") or {}).get("clips", {})
+        plan = self._sd("scene_plan")
+        assets = self._sd("assets")["scenes"]
+        voice = (self._sd("voice") or {}).get("clips", {})
         clips, trans = [], []
         # re-conform visuals whose scene grew after narration timing
         for sc in plan["scenes"]:
             f = self.p.dir / assets[sc["id"]]["file"]
-            if ff.duration(f) + 0.05 < sc["duration_s"]:
-                g = f.with_name("visual_fit.mp4")
+            if abs(ff.duration(f) - sc["duration_s"]) > 0.05:      # grown by narration, or trimmed for a cut-down
+                g = f.with_name(self._t("visual_fit.mp4"))
                 vt.normalize(str(f), str(g), self.w, self.h, self.fps, sc["duration_s"])
                 f = g
             clips.append(str(f))
         tl = self._timeline(plan)
         credits_s = 0.0
-        credits = (self.p.stage_data("assets") or {}).get("credits") or []
+        credits = (self._sd("assets") or {}).get("credits") or []
         if self.df.get("credits") and credits:
-            cf = self.p.path("edit", "credits.mp4")
+            cf = self.p.path("edit", self._t("credits.mp4"))
             vt.scroll_credits(["影像來源 / Footage credits", ""] + credits, str(cf), seconds=min(12, 4 + len(credits)),
                               w=self.w, h=self.h)
             clips.append(str(cf))
@@ -670,7 +690,7 @@ class Runner:
             plan["scenes"].append({"id": "credits", "duration_s": ff.duration(cf), "transition": {"type": "fade", "duration": 0.5}})
             tl = self._timeline(plan)
             plan["scenes"].pop()
-        picture = self.p.path("edit", "picture.mp4")
+        picture = self.p.path("edit", self._t("picture.mp4"))
         vt.xfade_chain(clips, str(picture), tl["transitions"], fps=self.fps)
         total = ff.duration(picture)
         # narration stem + subtitle spans
@@ -690,7 +710,7 @@ class Runner:
                 prev_end = at + voice[sc["id"]]["duration"]
                 vclips.append({"path": str(self.p.dir / voice[sc["id"]]["file"]), "at": at, "gain_db": 0})
                 spans.append({"start": at, "end": at + voice[sc["id"]]["duration"], "text": sc["narration"], "scene": sc["id"]})
-        vo = self.p.path("audio", "voice_stem.wav")
+        vo = self.p.path("audio", self._t("voice_stem.wav"))
         au.place(vclips, str(vo), total)
         return {"picture": self.p.rel(picture), "voice_stem": self.p.rel(vo), "spans": spans, "total": total,
                 "starts": tl["starts"], "credits_s": round(credits_s, 3)}
@@ -701,17 +721,17 @@ class Runner:
             return self._dub_compose()
         if self.pipe_name == "clip-factory":
             return self._clip_compose()
-        ed = self.p.stage_data("edit")
-        ms = self.p.stage_data("music_sfx") or {}
+        ed = self._sd("edit")
+        ms = self._sd("music_sfx") or {}
         picture = self.p.dir / ed["picture"]
         total = ed["total"]
         # ambience: native H3 audio / stock sound from the picture, kept low under narration
-        amb = self.p.path("audio", "ambience.wav")
+        amb = self.p.path("audio", self._t("ambience.wav"))
         vt.extract_audio(str(picture), str(amb))
-        fx = self.p.path("audio", "fx_stem.wav")
+        fx = self.p.path("audio", self._t("fx_stem.wav"))
         au.place([{"path": str(amb), "at": 0, "gain_db": -16}] + ms.get("sfx", []), str(fx), total)
         music = self.p.dir / ms["music"]["file"] if ms.get("music") else None
-        mix = self.p.path("audio", "mix.wav")
+        mix = self.p.path("audio", self._t("mix.wav"))
         voice = self.p.dir / ed["voice_stem"]
         if music:
             au.duck_mix(str(voice), str(music), str(mix), sfx=str(fx), music_db=-8, total=total)
@@ -722,11 +742,11 @@ class Runner:
     def _finish(self, picture: Path, mix: Path, spans: list[dict], total: float, asr_src: Path | None = None) -> dict:
         # loudness → mux → grade → subtitles → delivery encode
         target = float(settings().get("qa.loudness_lufs", -14))
-        mixn = self.p.path("audio", "mix_norm.wav")
+        mixn = self.p.path("audio", self._t("mix_norm.wav"))
         au.loudnorm(str(mix), str(mixn), target_lufs=target, true_peak=float(settings().get("qa.true_peak_db", -1.0)) - 0.5)
-        av = self.p.path("compose", "av.mp4")
+        av = self.p.path("compose", self._t("av.mp4"))
         vt.replace_audio(str(picture), str(mixn), str(av))
-        graded = self.p.path("compose", "graded.mp4")
+        graded = self.p.path("compose", self._t("graded.mp4"))
         vt.color_grade(str(av), str(graded), self.df.get("grade", "neutral"))
         cues = sub.cues_from_spans(spans) if self.brief.get("subtitles", True) else []
         words = []
@@ -735,19 +755,20 @@ class Runner:
             src = asr_src if asr_src and Path(asr_src).exists() else mixn
             words = [w for s in transcribe(src, self.brief.get("language"))["segments"] for w in s["words"]]
             cues = sub.align_to_words(cues, words)
-        srt = self.p.path("compose", "subtitles.srt")
-        ass = self.p.path("compose", "subtitles.ass")
+        cues = self._post_cues(cues, spans)
+        srt = self.p.path("compose", self._t("subtitles.srt"))
+        ass = self.p.path("compose", self._t("subtitles.ass"))
         out = graded
         if cues:
             sub.write_srt(cues, str(srt))
             sub.write_vtt(cues, str(srt.with_suffix(".vtt")))
             sub.write_ass(cues, str(ass), self.w, self.h, style=self.df.get("subtitle_style", "clean"),
-                          karaoke=bool(self.df.get("karaoke")))
+                          karaoke=bool(self.df.get("karaoke")), extra=self._ass_extra(total))
             if self.brief.get("burn_subtitles", True):
-                burned = self.p.path("compose", "subbed.mp4")
+                burned = self.p.path("compose", self._t("subbed.mp4"))
                 sub.burn(str(graded), str(ass), str(burned))
                 out = burned
-        final = self.p.path("compose", "master.mp4")
+        final = self.p.path("compose", self._t("master.mp4"))
         ff.run(["-i", out, "-c:v", "libx264", "-crf", str(settings().get("render.crf", 18)), "-preset",
                 settings().get("render.preset", "medium"), "-profile:v", "high", "-pix_fmt", "yuv420p",
                 "-r", str(self.fps), "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
@@ -779,12 +800,14 @@ class Runner:
                 (self.brief.get("duration_s") if self.pipe_name not in ("clip-factory", "localization-dub") else None)
             promise = {"duration_s": target, "extra_s": (self.p.stage_data("edit") or {}).get("credits_s", 0),
                        "aspect": c.get("aspect", self.aspect if self.aspect != "keep" else None),
-                       "subtitles": bool(self.brief.get("subtitles", True)) and bool(c.get("spans"))}
+                       "subtitles": bool(self.brief.get("subtitles", True)) and bool(c.get("spans")),
+                       "tolerance_s": c.get("tolerance_s")}
             rep = qa.run_all(master, promise=promise, w=w, h=h, fps=c.get("fps", self.fps),
                              workdir=self.p.dir / "qa" / Path(c["master"]).stem,
                              cues=c.get("cues") or None, narration_spans=c.get("spans"), words=c.get("words"), vision=vision)
             # one automatic repair pass for audio level problems
-            if any(r["check"] == "loudness" and r["status"] == "fail" for r in rep["results"]):
+            if any((r["check"] == "loudness" and r["status"] == "fail") or
+                   (r["check"] == "container" and "drift" in r["message"]) for r in rep["results"]):
                 fixed = Path(master).with_name("master_fixed.mp4")
                 au.loudnorm(master, str(fixed), target_lufs=float(settings().get("qa.loudness_lufs", -14)), video=True)
                 fixed.replace(master)
@@ -813,15 +836,18 @@ class Runner:
         outs = comp.get("outputs") or [comp]
         return {"final": outs[0]["master"], "qa": qa_rep["status"], "pending_approval": True}
 
+    def _title(self) -> str:                      # hook: deliverable name
+        return (self.p.stage_data("proposal") or {}).get("title") or self.p.id
+
     def _deliver(self) -> dict:
         qa_rep = self.p.stage_data("qa")
         comp = self.p.stage_data("compose")
         outs = comp.get("outputs") or [comp]
-        title = (self.p.stage_data("proposal") or {}).get("title") or self.p.id
+        title = self._title()
         safe = "".join(ch for ch in title if ch.isalnum() or ch in " -_（）()").strip()[:60] or "midea"
         deliver = []
         for i, c in enumerate(outs):
-            name = f"{safe}{'' if len(outs) == 1 else f'_{i+1}'}"
+            name = f"{safe}{'' if len(outs) == 1 else '_' + str(c.get('tag') or i + 1)}"
             dst = self.p.path("final", f"{name}.mp4")
             shutil.copy(self.p.dir / c["master"], dst)
             item = {"video": self.p.rel(dst)}
@@ -985,8 +1011,16 @@ wording rather than run long. Keep names and terms consistent. JSON {{segments:[
         return r
 
 
+def runner_for(project: Project, auto_approve: bool = False) -> Runner:
+    """The stage runner for a project (ads have their own subclass)."""
+    if project.load().get("pipeline") == "ad-60":
+        from .ad import AdRunner
+        return AdRunner(project, auto_approve=auto_approve)
+    return Runner(project, auto_approve=auto_approve)
+
+
 def run_async(project: Project, auto_approve: bool = False) -> threading.Thread:
-    t = threading.Thread(target=lambda: Runner(project, auto_approve=auto_approve).run(), daemon=True,
+    t = threading.Thread(target=lambda: runner_for(project, auto_approve=auto_approve).run(), daemon=True,
                          name=f"run-{project.id}")
     t.start()
     return t

@@ -147,7 +147,13 @@ def project(pid: str) -> dict:
     p = _proj(pid)
     d = p.load()
     d["data"] = {s: p.stage_data(s) for s in ("reference_analysis", "proposal", "script", "scene_plan", "voice", "assets",
-                                              "music_sfx", "highlights", "translate", "compose", "qa", "publish")}
+                                              "music_sfx", "highlights", "translate", "compose", "qa", "publish",
+                                              "product", "tryon", "concepts", "copy", "storyboard", "versions")}
+    for k in ("product",):
+        if d["data"].get(k):
+            d["data"][k].pop("jsonld", None)
+    for o in (d["data"].get("versions") or {}).get("outputs", []):
+        o.pop("words", None)
     comp = d["data"].get("compose") or {}
     comp.pop("words", None)
     for o in comp.get("outputs", []):
@@ -400,3 +406,35 @@ def actor_files(aid: str, path: str) -> FileResponse:
     if base not in f.parents or not f.is_file():
         raise HTTPException(404)
     return FileResponse(f)
+
+
+# ---------------------------------------------------------------- ads (ad-60)
+class NewAd(BaseModel):
+    lead: str                                  # actor id / @handle — wears / uses the product
+    partner: str | None = None
+    product_url: str
+    duration_s: float = 60                     # fixed at 60 for now (+ 15 s cut-down)
+    language: str = "en"
+    subtitle_languages: list[str] = ["en", "zh-TW"]
+    tone: str = ""
+    audience: str = ""
+    banned_words: list[str] = []
+    formats: list[str] = ["16:9", "9:16", "1:1"]
+    cutdown_15: bool = True
+    auto_approve: bool = False
+
+
+@app.post("/api/ads")
+def create_ad(req: NewAd) -> dict:
+    cast = AC.resolve_list([req.lead] + ([req.partner] if req.partner else []))
+    if not cast:
+        raise HTTPException(400, "找不到主演演員")
+    names = [AC.load(a).handle for a in cast]
+    brief = {"prompt": f"60 秒廣告：{req.product_url}（" + "、".join("@" + n for n in names) + "）", "pipeline": "ad-60",
+             "product_url": req.product_url, "actors": cast, "duration_s": 60.0, "language": req.language,
+             "subtitle_languages": req.subtitle_languages, "tone": req.tone, "audience": req.audience,
+             "banned_words": req.banned_words, "formats": [f for f in req.formats if f in ("16:9", "9:16", "1:1")] or ["16:9"],
+             "cutdown_15": req.cutdown_15, "aspect": "16:9", "aspect_locked": True, "music": True, "subtitles": True}
+    p = Project.create(brief, "ad-60")
+    _runs[p.id] = run_async(p, auto_approve=req.auto_approve)
+    return {"id": p.id, "pipeline": "ad-60"}

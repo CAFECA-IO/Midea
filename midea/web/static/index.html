@@ -77,7 +77,7 @@ pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;backgr
 <div class="app">
 <aside>
   <h1>Midea Studio <small id="mode"></small></h1>
-  <div class="nav"><button id="nav-films" class="on" onclick="goFilms()">影片製作</button><button id="nav-actors" onclick="goActors()">演員陣容 <span id="actor-count" style="color:var(--muted)"></span></button></div>
+  <div class="nav"><button id="nav-films" class="on" onclick="goFilms()">影片製作</button><button id="nav-actors" onclick="goActors()">演員陣容 <span id="actor-count" style="color:var(--muted)"></span></button><button id="nav-ads" onclick="goAds()">廣告製作</button></div>
   <div class="card">
     <h3>新影片</h3>
     <label>一句話描述</label>
@@ -119,7 +119,7 @@ let ACTORS = [], VIEW = "films", ACTOR = null, ACTOR_POLL = null, DRAFT = null, 
 const actorUrl = (id, p) => p ? `/actor-files/${id}/${p}`.replace(/#/g, "%23") : "";
 const GENDER_ZH = { female: "女", male: "男", nonbinary: "非二元" };
 const STATUS_ZH = { done: "完成", running: "製作中", awaiting_approval: "待核准", failed: "失敗", qa_failed: "QA 未過", created: "建立" };
-const STAGE_ZH = { reference_analysis: "參考分析", proposal: "企劃", script: "腳本", scene_plan: "分鏡", voice: "旁白", assets: "素材生成", music_sfx: "音樂音效", edit: "剪輯", compose: "合成字幕", qa: "自我審核", publish: "發佈", ingest: "匯入", transcribe: "轉錄", highlights: "高光", translate: "翻譯" };
+const STAGE_ZH = { reference_analysis: "參考分析", proposal: "企劃", script: "腳本", scene_plan: "分鏡", voice: "旁白", assets: "素材生成", music_sfx: "音樂音效", edit: "剪輯", compose: "合成字幕", qa: "自我審核", publish: "發佈", ingest: "匯入", transcribe: "轉錄", highlights: "高光", translate: "翻譯", product: "商品解析", tryon: "商品定裝", concepts: "創意提案", copy: "文案腳本", storyboard: "鏡頭分鏡", versions: "多版本輸出" };
 const KIND_ZH = { h3_t2v: "H3 生成", h3_i2v: "H3 圖生影", h3_r2v: "H3 參考", stock_video: "真實影片", stock_image: "真實照片", motion: "動態圖形", title_card: "標題卡", user_media: "自有素材" };
 const fileUrl = p => `/files/${CUR}/${p}`.replace(/#/g, "%23");
 
@@ -132,10 +132,11 @@ async function init() {
   initMention();
   refreshList(); refreshGpu(); refreshActors(); setInterval(refreshGpu, 5000); setInterval(refreshList, 8000);
   const h = location.hash.slice(1);
-  if (h === "actors") goActors(); else if (h.startsWith("actor/")) openActor(h.slice(6)); else if (h) open(h);
+  if (h === "ads") goAds(); else if (h === "actors") goActors(); else if (h.startsWith("actor/")) openActor(h.slice(6)); else if (h) open(h);
   window.addEventListener("hashchange", () => {
     const k = location.hash.slice(1);
-    if (k === "actors" && VIEW !== "actors") goActors();
+    if (k === "ads") { if (VIEW !== "ads") goAds(); }
+    else if (k === "actors" && VIEW !== "actors") goActors();
     else if (k.startsWith("actor/") && ACTOR?.id !== k.slice(6)) openActor(k.slice(6));
     else if (k && !k.startsWith("actor") && (k !== CUR || VIEW !== "films")) open(k);
   });
@@ -173,7 +174,7 @@ async function create() {
 }
 async function open(id) {
   setView("films"); clearInterval(ACTOR_POLL);
-  if (CUR !== id) { SEL.clear(); REGEN = {}; }
+  if (CUR !== id) { SEL.clear(); REGEN = {}; TAB = ""; }
   CUR = id; location.hash = id; refreshList();
   if (ES) ES.close();
   ES = new EventSource(`/api/events/${id}`);
@@ -207,15 +208,19 @@ function render() {
   if (awaiting) h += gatePanel(awaiting[0], awaiting[1]);
   const err = [...(d.events || [])].reverse().find(e => e.kind === "error");
   if (err && ["failed", "qa_failed"].includes(d.status)) h += `<div class="card" style="border-color:var(--bad);margin-bottom:12px"><b style="color:var(--bad)">錯誤</b> ${esc(err.message)}</div>`;
-  const tabs = { board: "分鏡看板", plan: "企劃 / 腳本", qa: "自我審核", final: "成片", log: "紀錄" };
+  const isAd = d.pipeline === "ad-60";
+  const tabs = isAd ? { ad: "廣告製作", board: "生成鏡頭", qa: "自我審核", final: "成片（6 支）", log: "紀錄" } : { board: "分鏡看板", plan: "企劃 / 腳本", qa: "自我審核", final: "成片", log: "紀錄" };
+  if (!tabs[TAB]) TAB = isAd ? "ad" : "board";
   h += `<div class="tabs">${Object.entries(tabs).map(([k, v]) => `<div class="tab ${TAB === k ? "on" : ""}" onclick="TAB='${k}';render()">${v}</div>`).join("")}</div>`;
-  h += ({ board: boardTab, plan: planTab, qa: qaTab, final: finalTab, log: logTab })[TAB]();
+  h += ({ board: boardTab, plan: planTab, qa: qaTab, final: finalTab, log: logTab, ad: adTab })[TAB]();
   $("#main").innerHTML = h;
 }
 function gatePanel(gate, g) {
   const hint = { proposal: "確認主題、受眾、風格與管線", script: "確認旁白腳本（可直接編修 JSON）", scene_plan: "確認分鏡、每鏡素材類型與預估花費後才會動用 GPU 生成",
     assets: "逐鏡檢查生成畫面與真實素材，勾選要重做的鏡頭；核准後才進行最終剪輯渲染", publish: "成片已完成自我審核（結果見「自我審核」分頁），確認後輸出", reference_analysis: "確認從參考影片抽取的節奏與結構",
-    highlights: "確認要剪成短片的片段", translate: "確認翻譯稿" }[gate] || "";
+    highlights: "確認要剪成短片的片段", translate: "確認翻譯稿", product: "確認商品事實表：只有這裡列出的事實會被寫進文案（可直接編修 JSON）",
+    tryon: "確認主演穿上商品的樣子；版型、袖長不對可勾選重畫並寫下說明", concepts: "看完三個方向的風格意象與 10 秒預覽，按「選這個方向」核准",
+    copy: "確認文案與腳本大綱；紅色為宣稱檢查不通過的項目", storyboard: "逐鏡確認鏡頭語言與關鍵分鏡圖（核准後才用 H3 生成影片），可勾選重畫" }[gate] || "";
   const qaFail = gate === "publish" && DATA.data.qa?.status === "fail";
   const b = g.summary?.budget;
   return `<div class="gatebar"><div class="row" style="justify-content:space-between"><div><b>◆ 等待核准：${STAGE_ZH[gate] || gate}</b> <span style="color:var(--muted)">${hint}</span>
@@ -223,12 +228,15 @@ function gatePanel(gate, g) {
     ${qaFail ? `<div style="color:var(--bad)">QA 未通過 — 核准即代表你明確覆核此成片</div>` : ""}</div></div>
     <div class="row" style="margin-top:8px"><textarea id="g-note" placeholder="修改意見（駁回時會回饋給 AI 重新製作）"></textarea>
     <div style="flex:0 0 auto;display:flex;gap:6px">${gate === "assets" ? `<button onclick="regen()" ${SEL.size ? "" : "disabled"}>重做選取的 ${SEL.size} 鏡</button>` : ""}
+    ${gate === "storyboard" ? `<button onclick="redrawShots()" ${SEL.size ? "" : "disabled"}>重畫選取的 ${SEL.size} 張分鏡</button>` : ""}
+    ${gate === "tryon" ? `<button onclick="redoTryon()" ${SEL.size ? "" : "disabled"}>重畫選取的 ${SEL.size} 張</button>` : ""}
     <button class="danger" onclick="decide('${gate}',false)">駁回重做</button><button class="primary" onclick="decide('${gate}',true)">核准</button></div></div></div>`;
 }
 async function decide(gate, ok, edits) {
   const note = $("#g-note")?.value || "";
   let e = edits || null;
-  if (ok && ["proposal", "script", "scene_plan", "translate", "highlights"].includes(gate)) {
+  if (ok && gate === "concepts" && !(edits && edits.choose)) return alert("請在「廣告製作」分頁選擇一個創意方向");
+  if (ok && ["proposal", "script", "scene_plan", "translate", "highlights", "product", "copy"].includes(gate)) {
     const ta = $("#json-edit"); if (ta && ta.dataset.gate === gate && ta.dataset.dirty) { try { e = { data: JSON.parse(ta.value) }; } catch (x) { return alert("JSON 格式錯誤：" + x.message); } }
   }
   await api(`/api/projects/${CUR}/gates/${gate}`, { method: "POST", body: JSON.stringify({ approved: ok, note, edits: e }) });
@@ -311,6 +319,7 @@ function finalTab() {
   const it = DATA.deliverables?.items; const comp = DATA.data.compose;
   if (!it && !comp) return `<div class="empty">尚未完成</div>`;
   const list = it || (comp.outputs || [comp]).map(c => ({ video: c.master, srt: c.srt }));
+  if (DATA.pipeline === "ad-60") return adFinal(list);
   return list.map(x => `<div class="card" style="margin-bottom:12px"><video src="${fileUrl(x.video)}" controls style="width:100%;max-height:70vh;background:#000;border-radius:8px"></video>
     <div class="row" style="margin-top:8px;justify-content:flex-start;gap:8px">${["video", "srt", "ass", "thumbnail"].filter(k => x[k]).map(k => `<a href="${fileUrl(x[k])}" download><button>${k.toUpperCase()}</button></a>`).join("")}
     ${DATA.deliverables?.readme ? `<a href="${fileUrl(DATA.deliverables.readme)}" target="_blank"><button>README / 出處</button></a>` : ""}</div></div>`).join("");
@@ -323,7 +332,7 @@ function logTab() {
     <h2>GPU 用量</h2><div class="log">${(DATA.cost.lines || []).slice(-80).reverse().map(l => `${l.service} ${l.gpu_s}s → ${l.cost}`).join("<br>") || "—"}</div>`;
 }
 // ------------------------------------------------------------------ virtual actors
-function setView(v) { VIEW = v; $("#nav-films").classList.toggle("on", v === "films"); $("#nav-actors").classList.toggle("on", v !== "films"); }
+function setView(v) { VIEW = v; $("#nav-films").classList.toggle("on", v === "films"); $("#nav-actors").classList.toggle("on", v === "actors" || v === "actor"); $("#nav-ads").classList.toggle("on", v === "ads"); }
 function goFilms() { setView("films"); clearInterval(ACTOR_POLL); if (CUR) open(CUR); else { location.hash = ""; $("#main").innerHTML = `<div class="empty">選擇左側專案，或輸入一句話開始製作。</div>`; } }
 async function refreshActors() {
   try { ACTORS = await api("/api/actors"); $("#actor-count").textContent = ACTORS.length || ""; renderCastChips(); } catch (e) {}
@@ -612,6 +621,122 @@ function initMention() {
     else if (e.key === "Enter" || e.key === "Tab") { const it = menu.querySelectorAll(".ac-item")[AC_IDX]; if (it) { pick(it.dataset.h); e.preventDefault(); } }
     else if (e.key === "Escape") menu.hidden = true;
   });
+}
+// ------------------------------------------------------------------ ads (ad-60)
+const BEAT_ZH = { hook: "鉤子", problem: "痛點", reveal: "商品登場", demo: "賣點示範", emotion: "情感", cta: "CTA" };
+async function goAds() {
+  setView("ads"); clearTimeout(ACTOR_POLL); if (ES) { ES.close(); ES = null; } location.hash = "ads"; CUR = null;
+  await refreshActors();
+  const opt = ACTORS.map(a => `<option value="${a.id}">${esc(a.name)} @${esc(a.handle)}</option>`).join("");
+  $("#main").innerHTML = `<h1>廣告製作 <small>選定演員與商品網址，自動產出風格意象、文案、腳本大綱、鏡頭語言、關鍵分鏡與 6 支廣告影片</small></h1>
+  <div class="card"><div class="fgrid">
+    <div><label>主演（穿戴／使用商品）</label><select id="ad-lead">${opt}</select></div>
+    <div><label>搭檔（選填）</label><select id="ad-partner"><option value="">（無）</option>${opt}</select></div>
+    <div class="full"><label>商品網址</label><input id="ad-url" placeholder="https://…/product/…"></div>
+    <div><label>長度</label><select id="ad-len" disabled><option>60 秒（另含 15 秒剪輯版）</option></select></div>
+    <div><label>台詞語言</label><select id="ad-lang"><option value="en">English</option><option value="zh-TW">繁中</option><option value="zh-CN">简中</option><option value="ja">日本語</option></select></div>
+    <div><label>字幕</label><select id="ad-subs"><option value="en,zh-TW">英文＋繁中（雙語）</option><option value="zh-TW">繁中</option><option value="en">English</option></select></div>
+    <div><label>品牌語氣（選填）</label><input id="ad-tone" placeholder="例：溫暖、俐落、不浮誇"></div>
+    <div><label>目標受眾（選填）</label><input id="ad-aud" placeholder="例：常出差的 25–40 歲上班族"></div>
+    <div><label>禁用詞（逗號分隔，選填）</label><input id="ad-ban" placeholder="例：最便宜, 第一"></div>
+    <div class="full"><label>輸出規格</label><div class="row" style="justify-content:flex-start;gap:14px">
+      ${["16:9", "9:16", "1:1"].map(f => `<label class="chk" style="margin:0"><input type="checkbox" class="ad-fmt" value="${f}" checked> ${f}</label>`).join("")}
+      <label class="chk" style="margin:0"><input type="checkbox" id="ad-15" checked> 加做 15 秒剪輯版</label></div></div>
+  </div>
+  <div style="color:var(--muted);font-size:12px;margin-top:10px">流程：商品解析 ◆ → 商品定裝 ◆（穿戴類）→ 三個創意方向＋10 秒預覽 ◆ → 文案與腳本大綱（宣稱檢查）◆ → 鏡頭語言與關鍵分鏡 ◆ → 生成 → 多版本輸出 → 自我審核 → 發佈 ◆。預估 GPU 約 1.5–2 小時（9:16 需重新生成時較久）。</div>
+  <div style="margin-top:12px"><button class="primary" id="ad-go" onclick="createAd()">開始製作廣告</button></div></div>`;
+}
+async function createAd() {
+  const url = $("#ad-url").value.trim(); if (!url) return $("#ad-url").focus();
+  const body = { lead: $("#ad-lead").value, partner: $("#ad-partner").value || null, product_url: url, language: $("#ad-lang").value,
+    subtitle_languages: $("#ad-subs").value.split(","), tone: $("#ad-tone").value, audience: $("#ad-aud").value,
+    banned_words: $("#ad-ban").value.split(/[,，、]/).map(x => x.trim()).filter(Boolean),
+    formats: [...document.querySelectorAll(".ad-fmt:checked")].map(x => x.value), cutdown_15: $("#ad-15").checked };
+  if (body.partner === body.lead) body.partner = null;
+  $("#ad-go").disabled = true;
+  try { const r = await api("/api/ads", { method: "POST", body: JSON.stringify(body) }); TAB = "ad"; await refreshList(); open(r.id); }
+  catch (e) { alert(e.message); $("#ad-go").disabled = false; }
+}
+function adTab() {
+  const d = DATA.data, g = DATA.gates || {}, aw = n => g[n]?.status === "awaiting";
+  const pf = p => fileUrl(p);
+  let h = "";
+  const pr = d.product;
+  if (pr) {
+    const ft = pr.fact_table || {};
+    h += `<h2>商品解析 <span class="badge">${esc(ft.product_type || "")}</span></h2><div class="card"><div class="row" style="align-items:flex-start;gap:16px">
+      <div style="flex:0 0 180px">${(pr.images || []).slice(0, 1).map(i => `<img src="${pf("product/" + (i.cutout || i.file))}" style="width:180px;border-radius:4px;background:#fff">`).join("")}
+        <div style="display:flex;gap:4px;margin-top:6px">${(pr.palette || []).map(c => `<span title="${c.hex} ${esc(c.name_zh)}" style="flex:1;height:18px;background:${c.hex};border-radius:2px"></span>`).join("")}</div></div>
+      <div style="flex:1"><div style="font-size:16px">${esc(ft.name || pr.name)} <span style="color:var(--muted)">· ${esc(ft.brand || pr.brand)}</span></div>
+        <div style="color:var(--muted);font-size:12px;margin:2px 0 8px"><a href="${esc(pr.url)}" target="_blank">${esc(pr.url)}</a> · 擷取方式 ${esc(pr.fetched_with)} ·
+          價格：${pr.price?.display ? esc(pr.price.currency + " " + pr.price.value) : `<span style="color:var(--warn)">不使用（${esc(pr.price?.reason || "頁面無價格")}）</span>`}</div>
+        <table><tr><th>#</th><th>事實</th><th>出處（原文）</th><th></th></tr>${(ft.facts || []).map(f => `<tr><td>${f.id}</td><td>${esc(f.fact_zh || f.fact)}</td>
+          <td style="color:var(--muted);font-size:12px">${esc(f.source)}</td><td>${f.verified ? `<span class="badge b-pass">已核對</span>` : `<span class="badge b-warn">未核對</span>`}</td></tr>`).join("")}</table>
+        ${(ft.unknown || []).length ? `<div style="font-size:12px;color:var(--muted);margin-top:6px">頁面沒有提供：${ft.unknown.map(esc).join("、")}（文案不會提到）</div>` : ""}</div></div>
+      ${aw("product") ? jsonEditor("product", pr.fact_table, "編修商品事實表") : ""}</div>`;
+  }
+  const t = d.tryon;
+  if (t && !t.skipped) {
+    h += `<h2>商品定裝</h2><div class="gallery">${(t.views || []).map(v => `<div class="g ${SEL.has(v.view) ? "on" : ""}"><img src="${pf(v.file)}?v=${encodeURIComponent(v.file)}" onclick="window.open(this.src)">
+      <div class="row" style="justify-content:space-between"><span>${({ full_front: "正面全身", headshot: "大頭照", full_side: "側面全身" })[v.view] || v.view}</span>
+      ${qaBadge(v)}${aw("tryon") ? `<label class="chk" style="margin:0;flex:0 0 auto"><input type="checkbox" ${SEL.has(v.view) ? "checked" : ""} onchange="toggleSel('${v.view}',this.checked)">重畫</label>` : ""}</div></div>`).join("")}</div>
+      ${aw("tryon") ? `<label>版型／穿法說明（重畫時套用）</label><input id="tryon-notes" value="${esc(t.notes || "")}" placeholder="例：長袖、袖子捲到手肘、衣襬塞進褲子">` : ""}`;
+  } else if (t?.skipped) h += `<h2>商品定裝</h2><div class="card" style="color:var(--muted)">${esc(t.reason)}</div>`;
+  const c = d.concepts;
+  if (c?.concepts) {
+    h += `<h2>創意提案 ${c.chosen ? `<span class="badge b-approved">已選 ${esc(c.chosen)}</span>` : ""}</h2><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${c.concepts.map(x => `
+      <div class="scene ${c.chosen === x.id ? "sel" : ""}"><div class="media">${x.preview_file ? `<video src="${pf(x.preview_file)}" controls preload="metadata"></video>` : "預覽生成中…"}<span class="badge k">${esc(x.id)}</span></div>
+      <div class="body"><b>${esc(x.name)}</b><div style="color:var(--accent)">「${esc(x.slogan)}」</div><div class="nar">${esc(x.idea)}</div>
+        <div style="display:flex;gap:3px">${(x.palette || []).map(p => `<span title="${p}" style="flex:1;height:16px;background:${p};border-radius:2px"></span>`).join("")}</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px">${(x.mood || []).map(m => `<img src="${pf(m)}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:2px">`).join("")}</div>
+        <div class="vis">${(x.keywords || []).map(esc).join(" · ")}<br>光線：${esc(x.lighting)}<br>配樂：${esc(x.music)}</div>
+        ${aw("concepts") ? `<button class="primary" onclick="decide('concepts',true,{choose:'${x.id}',note:$('#g-note')?.value||''})">選這個方向</button>` : ""}</div></div>`).join("")}</div>`;
+  }
+  const cp = d.copy;
+  if (cp?.headline !== undefined) {
+    const tr = Object.values(cp.translations || {})[0] || {};
+    const flags = cp.flags || [];
+    h += `<h2>廣告文案與腳本大綱</h2><div class="card">
+      ${flags.length ? `<div style="margin-bottom:10px">${flags.map(f => `<div style="color:${f.level === "error" ? "var(--bad)" : "var(--warn)"};font-size:13px">${f.level === "error" ? "✕" : "⚠"} ${esc(f.message)}</div>`).join("")}</div>` : `<div style="color:var(--ok);font-size:13px;margin-bottom:8px">✓ 宣稱檢查通過：所有宣稱都對得回商品事實表</div>`}
+      <div class="kv"><div>主標</div><div><b>${esc(cp.headline)}</b> <span style="color:var(--muted)">${esc(tr[cp.headline] || "")}</span></div>
+        <div>副標</div><div>${esc(cp.sub)} <span style="color:var(--muted)">${esc(tr[cp.sub] || "")}</span></div><div>CTA</div><div>${esc(cp.cta)}</div>
+        <div>字卡</div><div>${(cp.supers || []).map(s => `<span class="badge">${esc(BEAT_ZH[s.beat] || s.beat)}</span> ${esc(s.text)}`).join("<br>")}</div>
+        <div>社群貼文</div><div style="font-size:12px">${(cp.social || []).map(esc).join("<br>")}</div></div>
+      <table style="margin-top:10px"><tr><th>段落</th><th>時間</th><th>目的</th><th>台詞</th></tr>${(cp.outline || []).map(b => `<tr><td>${esc(BEAT_ZH[b.beat] || b.beat)}</td><td>${b.start}–${b.end}s</td><td>${esc(b.purpose)}</td>
+        <td>${(b.lines || []).map(l => `<b>${esc(l.speaker)}</b>：${esc(l.text)}<br><span style="color:var(--muted);font-size:12px">${esc(tr[l.text] || "")}</span>`).join("<br>")}</td></tr>`).join("")}</table>
+      ${aw("copy") ? jsonEditor("copy", Object.fromEntries(Object.entries(cp).filter(([k]) => !["flags", "translations"].includes(k))), "編修文案") : ""}</div>`;
+  }
+  const sb = d.storyboard;
+  if (sb?.shots) {
+    const total = sb.shots.reduce((a, s) => a + s.duration, 0), castOf = id => (DATA.cast || []).find(x => x.id === id);
+    h += `<h2>鏡頭語言與關鍵分鏡 <span class="badge">${sb.shots.length} 鏡 · ${total.toFixed(1)} 秒 · 商品出現 ${sb.product_seconds ?? "?"} 秒</span></h2>
+      <div class="grid">${sb.shots.map(s => { const sel = SEL.has(s.id);
+        return `<div class="scene ${sel ? "sel" : ""}"><div class="media">${s.keyframe ? `<img src="${pf(s.keyframe)}?v=${encodeURIComponent(s.keyframe)}" onclick="window.open(this.src)">` : (s.kind === "endcard" ? "商品定格片尾" : "分鏡繪製中…")}
+          <span class="badge k">${esc(s.id)} · ${esc(BEAT_ZH[s.beat] || s.beat)}</span><span class="badge d">${s.duration.toFixed(1)}s</span>
+          ${(s.actors || []).length ? `<span class="cast">${s.actors.map(castOf).filter(Boolean).map(x => `<img class="av" src="${actorUrl(x.id, x.thumb)}">`).join("")}</span>` : ""}</div>
+          <div class="body"><div class="vis">${esc([s.shot_size, s.angle, s.movement, s.lens].filter(Boolean).join(" · "))}<br>${esc([s.lighting, s.color].filter(Boolean).join(" · "))} · 轉場 ${esc(s.transition || "cut")}${s.product_visible ? " · 🛍 商品入鏡" : ""}</div>
+          ${s.line?.text ? `<div class="nar">🎙 ${esc(castOf(s.line.speaker)?.name || "旁白")}：${esc(s.line.text)}</div>` : ""}${s.super ? `<div class="vis">字卡：${esc(s.super)}</div>` : ""}
+          <div class="vis" style="font-size:11px">${esc(s.prompt || "")}</div>
+          ${aw("storyboard") && s.kind !== "endcard" ? `<label class="chk"><input type="checkbox" ${sel ? "checked" : ""} onchange="toggleSel('${s.id}',this.checked)"> 重畫這張分鏡</label>
+            ${sel ? `<textarea placeholder="新的畫面描述（留空＝同描述換一張）" oninput="setRegen('${s.id}','prompt',this.value)">${esc(REGEN[s.id]?.prompt || "")}</textarea>` : ""}` : ""}</div></div>`; }).join("")}</div>`;
+  }
+  return h || `<div class="empty">正在解析商品頁…</div>`;
+}
+function jsonEditor(gate, data, title) {
+  return `<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted)">${title}（JSON，修改後按上方「核准」生效）</summary>
+    <textarea id="json-edit" data-gate="${gate}" rows="14" style="font:12px ui-monospace,Menlo,monospace;margin-top:6px" oninput="this.dataset.dirty=1">${esc(JSON.stringify(data, null, 2))}</textarea></details>`;
+}
+async function redrawShots() { const r = {}; for (const id of SEL) r[id] = REGEN[id] || {}; await decide("storyboard", false, { redraw: r }); }
+async function redoTryon() { await decide("tryon", false, { redo: [...SEL], notes: $("#tryon-notes")?.value || "" }); }
+function adFinal(list) {
+  const outs = DATA.data.versions?.outputs || [], crops = DATA.data.versions?.crops || {};
+  const label = x => { const m = /_(60s|15s)_(\d+x\d+)\./.exec(x.video || "") || []; return m[1] ? `${m[1].replace("s", " 秒")} · ${m[2].replace("x", ":")}` : "60 秒 · 16:9"; };
+  const regen = Object.values(crops).filter(c => c.method === "regenerate").length;
+  return `<div style="color:var(--muted);font-size:13px;margin-bottom:10px">9:16 直式：${regen} 鏡重新生成、其餘由 16:9 智慧裁切（裁切需保留人物且原始畫素 ≥ 480px）。</div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${list.map(x => `<div class="card"><b>${label(x)}</b>
+    <video src="${fileUrl(x.video)}" controls preload="metadata" style="width:100%;max-height:52vh;background:#000;border-radius:6px;margin-top:6px"></video>
+    <div class="row" style="margin-top:6px;justify-content:flex-start;gap:6px">${["video", "srt", "ass"].filter(k => x[k]).map(k => `<a href="${fileUrl(x[k])}" download><button style="font-size:12px">${k.toUpperCase()}</button></a>`).join("")}</div></div>`).join("")}</div>
+    <div class="row" style="margin-top:12px;justify-content:flex-start;gap:8px">${[["final/storyboard.pdf", "分鏡表 PDF"], ["final/copy.md", "文案稿"], ["final/moodboard.jpg", "風格意象板"], ["final/README.md", "README / 出處"]].map(([f, t]) => `<a href="${fileUrl(f)}" target="_blank"><button>${t}</button></a>`).join("")}</div>`;
 }
 init();
 </script>

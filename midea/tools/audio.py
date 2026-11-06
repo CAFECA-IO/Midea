@@ -121,8 +121,11 @@ def loudnorm(src: str, out: str, target_lufs: float = -14.0, true_peak: float = 
     m = measure_loudness(src)["_raw"]
     af = (f"loudnorm=I={target_lufs}:TP={true_peak}:LRA={lra}:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
           f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
-    if video:
-        ff.run(["-i", src, "-af", af, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", *A, out])
+    # safety limiter at 4× oversampling: linear loudnorm cannot always honour TP, and AAC adds overshoot
+    lim = 10 ** ((true_peak - 1.0) / 20)
+    af += f",aresample=192000,alimiter=limit={lim:.4f}:attack=2:release=50:level=disabled,aresample=48000"
+    if video:                                   # pad/trim so the audio ends exactly with the picture
+        ff.run(["-i", src, "-af", af + ",apad", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", *A, "-shortest", out])
     else:
         ff.run(["-i", src, "-af", af, *A, out])
     return out
