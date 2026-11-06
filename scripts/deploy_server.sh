@@ -3,7 +3,7 @@
 # system Python or other users' services. Everything lives under $MIDEA_STACK.
 #
 #   MIDEA_STACK=/workspace/midea bash scripts/deploy_server.sh [step ...]
-#   steps: llama qwen comfy h3 zimage audio voxcpm sfx whisper acestep foley  (default: all)
+#   steps: llama qwen comfy h3 zimage qedit verify audio voxcpm sfx whisper acestep foley  (default: all)
 #
 # Each step is idempotent (marker files in $MIDEA_STACK/.done). Run inside tmux; total
 # download ≈ 200 GB. Ampere (RTX A6000 / sm_86) choices: INT8 "convrot" H3 weights and the
@@ -82,6 +82,34 @@ step_zimage() {  # Z-Image-Turbo (Apache-2.0) for virtual-actor costume photos (
   done_ zimage
 }
 
+step_qedit() {   # Qwen-Image-Edit-2511 (Apache-2.0): turnarounds, try-on, keyframes (~31 GB), same ComfyUI
+  is_done qedit && return
+  M="$S/ComfyUI/models"
+  hfdl Comfy-Org/Qwen-Image-Edit --local-dir "$S/models/qwen_image_edit" \
+              "split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors" \
+              "split_files/loras/Qwen-Edit-2509-Multiple-angles.safetensors"
+  hfdl Comfy-Org/Qwen-Image --local-dir "$S/models/qwen_image" \
+              "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors" "split_files/vae/qwen_image_vae.safetensors"
+  hfdl lightx2v/Qwen-Image-Edit-2511-Lightning --local-dir "$S/models/qwen_image_edit/split_files/loras" \
+              "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+  for d in diffusion_models text_encoders vae loras; do
+    mkdir -p "$M/$d"
+    for f in "$S/models/qwen_image_edit/split_files/$d"/* "$S/models/qwen_image/split_files/$d"/*; do
+      [ -f "$f" ] && ln -sf "$f" "$M/$d/"
+    done
+  done
+  done_ qedit
+}
+
+step_verify() {  # self-QA models: RTMW whole-body pose (rtmlib/onnxruntime, CPU) + ECAPA speaker model (audio venv)
+  is_done verify && return
+  uv pip install -q -p "$S/venv/bin/python" rtmlib onnxruntime
+  "$S/venv/bin/python" -c "from rtmlib import Wholebody; Wholebody(mode='balanced', backend='onnxruntime', device='cpu')"
+  uv pip install -q -p "$S/venvs/audio/bin/python" speechbrain
+  "$S/venvs/audio/bin/python" -c "from speechbrain.inference.speaker import EncoderClassifier as E; E.from_hparams('speechbrain/spkrec-ecapa-voxceleb', savedir='$S/models/ecapa', run_opts={'device':'cpu'})"
+  done_ verify
+}
+
 step_audio() {   # shared venv for VoxCPM2 + SFX servers (torch cu126)
   is_done audio && return
   uv venv -q -p 3.12 "$S/venvs/audio"
@@ -137,7 +165,7 @@ step_foley() {   # HunyuanVideo-Foley XL (5.9 GB) in its own venv
 }
 
 STEPS=("$@")
-[ ${#STEPS[@]} -eq 0 ] && STEPS=(tools llama comfy audio whisper acestep foley voxcpm sfx h3 zimage qwen)
+[ ${#STEPS[@]} -eq 0 ] && STEPS=(tools llama comfy audio whisper acestep foley voxcpm sfx h3 zimage qedit verify qwen)
 step_tools
 for s in "${STEPS[@]}"; do echo "== $s start $(date +%T)"; "step_$s"; done
 echo "ALL DONE $(date)"

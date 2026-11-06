@@ -8,7 +8,7 @@
   midea services status | up qwen | down h3
   midea tools | pipelines | doctor | qa video.mp4
   midea actors new "32 歲台灣女記者，俐落短髮" [--handle mei]   # AI 補完設定 + 定妝照 + 聲音
-  midea actors list | show @mei | portraits @mei [--reseed] | voice @mei
+  midea actors list | show @mei | portraits @mei [--reseed] | voice @mei [--language en] | intro @mei | recheck @mei
   midea make "@mei 走訪台南老街的一天" --pipeline cinematic   # @ 指定演員演出
 """
 from __future__ import annotations
@@ -158,7 +158,11 @@ def cmd_actors(a: argparse.Namespace) -> None:
     if a.action == "portraits":
         AC.generate_portraits(x.id, reseed=a.reseed)
     elif a.action == "voice":
-        AC.generate_voice(x.id)
+        AC.generate_voice(x.id, lang=a.language if a.language != "zh-TW" else None)
+    elif a.action == "intro":
+        AC.generate_intro(x.id)
+    elif a.action == "recheck":
+        AC.recheck(x.id)
     x = AC.load(x.id)
     out = x.model_dump(exclude={"jobs"})
     out["films"] = [{k: f[k] for k in ("project", "title", "status", "role", "lines")} for f in AC.filmography(x.id)]
@@ -196,7 +200,7 @@ def main(argv: list[str] | None = None) -> None:
     q.set_defaults(fn=cmd_qa)
     sp.add_parser("doctor").set_defaults(fn=cmd_doctor)
     ac = sp.add_parser("actors", help="virtual actors (@handle)")
-    ac.add_argument("action", choices=["list", "new", "show", "portraits", "voice"])
+    ac.add_argument("action", choices=["list", "new", "show", "portraits", "voice", "intro", "recheck"])
     ac.add_argument("ref", nargs="?", help="描述（new）或 @handle")
     ac.add_argument("--handle"); ac.add_argument("--language", default="zh-TW")
     ac.add_argument("--reseed", action="store_true"); ac.add_argument("--no-gen", action="store_true")

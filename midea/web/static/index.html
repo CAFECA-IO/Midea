@@ -59,8 +59,8 @@ pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;backgr
 .acard .ph{aspect-ratio:3/4;background:#11141c center/cover no-repeat;position:relative}.acard .ph .badge{position:absolute;left:8px;top:8px;background:#1a1e29cc}
 .acard .bd{padding:10px 12px}.acard .nm{font-size:15px}.acard .hd{color:var(--accent);font-size:12px}.acard .mt{color:var(--muted);font-size:12px}
 .acard.new{align-items:center;justify-content:center;border-style:dashed;color:var(--muted);min-height:280px;font-size:14px}
-.profile{display:grid;grid-template-columns:300px 1fr;gap:20px}.profile .hero{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:var(--r);background:#11141c;border:1px solid var(--line)}
-.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.gallery .g{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.profile{display:grid;grid-template-columns:300px 1fr;gap:20px}.profile .hero{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:var(--r);background:#11141c;border:1px solid var(--line)}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px}.gallery .g{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .gallery .g.on{border-color:var(--accent)}.gallery img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:#11141c}.gallery .g .row{padding:6px 8px;font-size:12px;gap:4px}
 .gallery .g button{font-size:11px;padding:2px 6px}
 .films{display:flex;flex-direction:column;gap:10px}.film{display:grid;grid-template-columns:200px 1fr;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px;cursor:pointer}.film:hover{border-color:var(--accent)}
@@ -333,11 +333,12 @@ async function goActors() {
   await refreshActors();
   const busy = ACTORS.some(a => Object.values(a.jobs || {}).some(j => ["running", "queued"].includes(j.status)));
   $("#main").innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:14px"><h1 style="margin:0">演員陣容 <small>${ACTORS.length} 位虛擬演員 · 在描述中輸入 @ 即可指定演出</small></h1></div>
-    <div class="roster">${ACTORS.map(a => `<div class="acard" onclick="openActor('${a.id}')"><div class="ph" style="background-image:url('${actorUrl(a.id, a.thumb)}')">
+    <div class="roster">${ACTORS.map(a => `<div class="acard" onclick="openActor('${a.id}')" ${a.intro ? `onmouseenter="const v=this.querySelector('video');v.hidden=false;v.play().catch(()=>{})" onmouseleave="const v=this.querySelector('video');v.pause();v.hidden=true"` : ""}>
+      <div class="ph" style="background-image:url('${actorUrl(a.id, a.thumb)}')">${a.intro ? `<video src="${actorUrl(a.id, a.intro)}" muted loop playsinline preload="none" hidden style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>` : ""}
       ${Object.values(a.jobs || {}).some(j => ["running", "queued"].includes(j.status)) ? `<span class="badge"><span class="spin"></span> 生成中</span>` : a.real_person ? `<span class="badge" title="以真人肖像 / 聲音授權建立">真人授權</span>` : ""}</div>
       <div class="bd"><div class="nm">${esc(a.name)}</div><div class="hd">@${esc(a.handle)}</div>
       <div class="mt">${a.age} 歲 · ${GENDER_ZH[a.gender] || ""}${a.occupation ? " · " + esc(a.occupation) : ""}</div>
-      <div class="mt">${a.films ? `🎬 ${a.films} 部影片` : "尚未演出"} · ${a.voice ? "🎙 聲音已建立" : "無聲音"}</div></div></div>`).join("")}
+      <div class="mt">${a.films ? `🎬 ${a.films} 部影片` : "尚未演出"} · ${a.intro ? "▶ 自我介紹" : a.look_approved ? "長相已確認" : a.thumb ? "待確認長相" : "尚無定妝照"}</div></div></div>`).join("")}
       <div class="acard new" onclick="newActor()">＋ 新增演員</div></div>`;
   if (busy) ACTOR_POLL = setTimeout(() => VIEW === "actors" && !ACTOR && goActors(), 3000);
 }
@@ -407,7 +408,7 @@ function consentBlock(prefix) {
 function renderActorForm() {
   const a = DRAFT || {};
   $("#a-form").innerHTML = `<div class="card" style="margin-top:12px">${actorFields(a)}${consentBlock("c")}
-    <div class="row" style="margin-top:14px;justify-content:flex-end"><label class="chk" style="flex:0 0 auto;margin:0 12px 0 0"><input type="checkbox" id="c-gen" checked> 建立後立即生成定妝照與聲音（約 2–4 分鐘 GPU）</label>
+    <div class="row" style="margin-top:14px;justify-content:flex-end"><label class="chk" style="flex:0 0 auto;margin:0 12px 0 0"><input type="checkbox" id="c-gen" checked> 建立後立即拍攝長相（正面兩張）與設計聲音，確認長相後自動展開三視圖與自我介紹影片</label>
     <button class="primary" style="flex:0 0 auto" id="c-save" onclick="saveNewActor()">建立演員</button></div></div>`;
 }
 async function uploadActorFiles(id, prefix) {
@@ -431,7 +432,7 @@ async function saveNewActor() {
     const a = await api("/api/actors", { method: "POST", body: JSON.stringify(body) });
     await uploadActorFiles(a.id, "c");
     if ($("#c-gen").checked) {
-      if (!$("#c-photo").files[0]) await api(`/api/actors/${a.id}/portraits`, { method: "POST", body: "{}" });
+      if (!$("#c-photo").files[0]) await api(`/api/actors/${a.id}/look`, { method: "POST", body: "{}" });
       if (!$("#c-voice").files[0]) await api(`/api/actors/${a.id}/voice`, { method: "POST", body: "{}" });
     }
     await refreshActors(); openActor(a.id);
@@ -448,24 +449,44 @@ async function openActor(id) {
 }
 function job(name) {
   const j = (ACTOR.jobs || {})[name]; if (!j) return "";
-  if (j.status === "running") return `<span class="badge b-running"><span class="spin"></span> 生成中${j.views ? ` ${j.done || 0}/${j.views.length}` : ""}</span>`;
+  if (j.status === "running") return `<span class="badge b-running"><span class="spin"></span> 生成中${j.total ? ` ${j.done || 0}/${j.total}` : ""}</span>`;
   if (j.status === "queued") return `<span class="badge b-awaiting">排隊中</span>`;
   if (j.status === "error") return `<span class="badge b-fail" title="${esc(j.error)}">失敗：${esc((j.error || "").slice(0, 60))}</span>`;
   return "";
 }
+const LANG_ZH = { "zh-TW": "繁中", "zh-CN": "简中", en: "English", ja: "日本語" };
+function qaBadge(p) {
+  const q = p?.qa || {}; if (!q.status || q.status === "skip") return "";
+  const tip = [...(q.issues || []), ...(q.attempts?.length > 1 ? [`共生成 ${q.attempts.length} 次`] : [])].join("；");
+  return q.status === "pass" ? `<span class="badge b-pass" title="${esc(tip || "自動驗收通過")}">✓ 驗收</span>`
+    : `<span class="badge b-warn" title="${esc(tip)}">⚠ ${esc((q.issues || [])[0] || "未通過")}</span>`;
+}
 function renderActor() {
-  const a = ACTOR, ap = a.appearance || {}, vo = a.voice || {}, by = Object.fromEntries((a.portraits || []).map(p => [p.view, p]));
-  const hero = by[a.primary] || a.portraits?.[0], ts = p => p ? `?t=${Math.round(p.at || 0)}` : "";
-  const films = a.films || [];
+  const a = ACTOR, ap = a.appearance || {}, vo = a.voice || {}, it = a.intro || {}, st = a.stale || {};
+  const by = {}; for (const p of a.portraits || []) { const v = ({ full_body: "full_front", profile: "full_side" })[p.view] || p.view; if (!by[v] || p.view === v) by[v] = p; }
+  const ts = p => p ? `?t=${Math.round(p.at || 0)}` : "", films = a.films || [];
+  const lookReady = a.look_views.every(v => by[v]), approved = a.look?.approved;
+  const head = by.headshot || a.portraits?.[0];
+  const busy = n => ["running", "queued"].includes(a.jobs?.[n]?.status);
+  const hero = it.file ? `<video class="hero" src="${actorUrl(a.id, it.file)}" poster="${actorUrl(a.id, it.poster)}" controls playsinline preload="metadata"></video>`
+    : head ? `<img class="hero" src="${actorUrl(a.id, head.file)}${ts(head)}">` : `<div class="hero" style="display:flex;align-items:center;justify-content:center;color:var(--muted)">${job("look") || "尚無定妝照"}</div>`;
+  const notices = [];
+  if (a.look?.stale) notices.push(`外貌設定已修改，目前的照片與設定不符。<button onclick="genLook(false)">依新設定重拍長相</button>`);
+  if (lookReady && !approved && !busy("look")) notices.push(`<b>定妝確認</b>：確認正面大頭照與正面全身照的長相後，才會展開側面 / 背面照並拍攝自我介紹影片。
+    <button class="primary" onclick="approveLook()">確認長相</button><button onclick="genLook(true)">換一張臉</button>`);
+  if ((st.views || []).length && approved && !busy("turnaround")) notices.push(`長相已更新，${st.views.map(v => a.views[v]).join("、")} 尚未跟上。<button onclick="genTurn()">重新展開三視圖</button>`);
+  if (st.intro && !busy("intro")) notices.push(`長相或聲音已更新，自我介紹影片已過期。<button onclick="genIntro()">重拍自我介紹</button>`);
+  if (vo.stale) notices.push(`聲音描述已修改。<button onclick="genVoice()">重新設計聲音</button>`);
+  if ((a.legacy || []).length && !approved) notices.push(`這位演員使用舊版定妝照（全身照沒有腳、沒有背面）。<button class="primary" onclick="genLook(false)">升級為新版定妝照</button>`);
   $("#main").innerHTML = `<h1><a href="#" onclick="goActors();return false">演員陣容</a> <span style="color:var(--muted)">/</span> ${esc(a.name)}</h1>
+  ${notices.map(n => `<div class="gatebar" style="position:static;margin-bottom:10px">${n}</div>`).join("")}
   <div class="profile"><div>
-    ${hero ? `<img class="hero" src="${actorUrl(a.id, hero.file)}${ts(hero)}">` : `<div class="hero" style="display:flex;align-items:center;justify-content:center;color:var(--muted)">${job("portraits") || "尚無定妝照"}</div>`}
+    ${hero}
+    ${it.file ? `<div style="font-size:12px;margin-top:6px">「${esc(it.text)}」</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">${it.status === "pass" ? `<span class="badge b-pass">✓ 驗收</span>` : `<span class="badge b-warn">⚠ 未達標</span>`}
+      台詞字錯率 ${Math.round((it.cer || 0) * 100)}% · 聲紋相似度 ${(it.similarity ?? 0).toFixed(2)}${it.cuts ? ` · <span style="color:var(--bad)">跳切 ${it.cuts}</span>` : ""} · ${LANG_ZH[it.lang] || it.lang}${(it.takes || []).length > 1 ? ` · 拍了 ${it.takes.length} 次` : ""}</div>` : ""}
+    <div class="row" style="margin-top:8px">${approved ? `<button onclick="genIntro()" ${busy("intro") ? "disabled" : ""}>${it.file ? "重拍自我介紹" : "拍攝自我介紹"}</button>` : ""}${job("intro")}</div>
     <button class="primary" style="width:100%;margin-top:10px" onclick="castInNew('${esc(a.handle)}')">用 @${esc(a.handle)} 製作新影片</button>
-    <div class="card" style="margin-top:10px"><h3>聲音 ${job("voice")}</h3>
-      ${vo.sample ? `<audio src="${actorUrl(a.id, vo.sample)}?t=${Math.round((a.jobs?.voice?.at) || 0)}" controls style="width:100%"></audio>` : `<div style="color:var(--muted)">尚未建立</div>`}
-      <div style="font-size:12px;color:var(--muted);margin-top:6px">${vo.source === "uploaded" ? "來源：真人授權錄音（複製）" : "來源：VoxCPM2 聲音設計"}<br>${esc(a.voice_prompt)}</div>
-      ${vo.sample_text ? `<div style="font-size:12px;margin-top:6px">「${esc(vo.sample_text)}」</div>` : ""}
-      <div class="row" style="margin-top:8px"><button onclick="genVoice()">${vo.sample ? "重新設計聲音" : "生成聲音"}</button></div></div>
     <div class="card" style="margin-top:10px"><div class="kv">
       <div>成本</div><div>${(a.cost?.actual || 0).toFixed(2)} ${META.currency || ""}</div>
       <div>授權</div><div>${a.consent?.real_person ? `真人授權 · ${esc((a.consent.scope || []).join("/"))}<br><span style="color:var(--muted);font-size:12px">${esc(a.consent.note || "")} ${a.consent.at ? new Date(a.consent.at * 1000).toLocaleDateString() : ""}</span>` : "純 AI 虛擬人物"}</div>
@@ -484,12 +505,23 @@ function renderActor() {
       <div>表演風格</div><div>${esc(a.acting_notes || "—")}</div>
       <div>背景</div><div>${esc(a.bio || "—")}</div>
       ${(a.tags || []).length ? `<div>標籤</div><div>${a.tags.map(t => `<span class="badge">${esc(t)}</span>`).join(" ")}</div>` : ""}</div></div>
-    <h2>定妝照 ${job("portraits")} <span style="flex:1"></span><button onclick="genPortraits(null,true)" style="font-size:12px">換一張臉（全部重生）</button></h2>
-    <div class="gallery">${Object.entries(a.views).map(([v, zh]) => { const p = by[v];
-      return `<div class="g ${a.primary === v ? "on" : ""}">${p ? `<img src="${actorUrl(a.id, p.file)}${ts(p)}" onclick="window.open(this.src)">` : `<div style="aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--muted)">—</div>`}
-        <div class="row" style="justify-content:space-between"><span>${zh}${p?.source === "uploaded" ? " · 上傳" : p?.source === "mock" ? " · mock" : ""}</span>
-        <span style="flex:0 0 auto;display:flex;gap:4px">${p && a.primary !== v ? `<button onclick="setPrimary('${v}')">設為主照</button>` : a.primary === v ? `<span class="badge b-approved">主照</span>` : ""}<button onclick="genPortraits(['${v}'])">重生</button></span></div></div>`; }).join("")}</div>
-    <div style="color:var(--muted);font-size:12px;margin-top:6px">主照與全身定裝會作為 MiniMax H3 參考圖，讓演員在每個鏡頭與每支影片中保持同一張臉與造型。</div>
+    <h2>定妝照 ${job("look")} ${job("turnaround")} <span style="flex:1"></span>${approved ? `<span class="badge b-approved" title="${a.look.approved_at ? new Date(a.look.approved_at * 1000).toLocaleString() : ""}">長相已確認 · 第 ${a.look.version} 版</span>` : ""}
+      <button onclick="genLook(true)" style="font-size:12px">換一張臉</button></h2>
+    <div class="gallery">${Object.entries(a.views).map(([v, zh]) => { const p = by[v], stale = (st.views || []).includes(v), legacy = p && p.view !== v;
+      return `<div class="g ${a.primary === v ? "on" : ""}">${p ? `<img src="${actorUrl(a.id, p.file)}${ts(p)}" style="${stale || legacy ? "opacity:.45" : ""}" onclick="window.open(this.src)">`
+          : `<div style="aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;padding:8px">${a.turn_views.includes(v) && !approved ? "確認長相後<br>自動展開" : "—"}</div>`}
+        <div class="row" style="justify-content:space-between;flex-wrap:wrap"><span>${zh}${p?.source === "uploaded" ? " · 上傳" : p?.source === "mock" ? " · mock" : ""}${legacy ? " · 舊版" : ""}${stale ? " · 已過期" : ""}</span>
+        <span style="flex:0 0 auto;display:flex;gap:4px">${qaBadge(p)}${p && !legacy && a.primary !== v && v === "headshot" ? `<button onclick="setPrimary('${v}')">設為主照</button>` : ""}
+        ${p && !legacy && (a.turn_views.includes(v) ? approved : true) ? `<button onclick="genView('${v}')" title="${a.look_views.includes(v) ? "重拍長相（正面兩張一起重拍）" : "只重畫這一張"}">重生</button>` : ""}</span></div></div>`; }).join("")}</div>
+    <div style="color:var(--muted);font-size:12px;margin-top:6px">先以 Z-Image 拍正面兩張確認長相，再由 Qwen-Image-Edit 依同一張臉展開側面與背面；每張都經姿態偵測驗收（看得到腳、頭頂不切、側面轉足、背面不露臉）。正面大頭照、正面全身、側面全身會作為 H3 參考圖。</div>
+    <details style="margin-top:12px"><summary style="cursor:pointer;color:var(--muted)">進階：標準聲音（台詞聲音複製的依據）${job("voice")}</summary>
+      <div class="card" style="margin-top:8px">
+        ${Object.entries(vo.samples && Object.keys(vo.samples).length ? vo.samples : (vo.sample ? { [vo.language || "zh-TW"]: { file: vo.sample, text: vo.sample_text, source: vo.source } } : {})).map(([lang, s]) =>
+          `<div style="margin-bottom:8px"><b>${LANG_ZH[lang] || lang}</b> <span style="color:var(--muted);font-size:12px">${s.source === "uploaded" ? "真人授權錄音" : s.source === "cloned" ? "由主要聲音跨語言複製" : "VoxCPM2 聲音設計"}</span>
+           <audio src="${actorUrl(a.id, s.file)}" controls style="width:100%;height:32px"></audio><div style="font-size:12px;color:var(--muted)">「${esc(s.text || "")}」</div></div>`).join("") || `<div style="color:var(--muted)">尚未建立</div>`}
+        <div style="font-size:12px;color:var(--muted)">${esc(a.voice_prompt)}</div>
+        <div class="row" style="margin-top:8px"><button onclick="genVoice()">重新設計主要聲音</button>
+          <select id="v-lang" style="max-width:120px"><option value="en">English</option><option value="zh-TW">繁中</option><option value="ja">日本語</option></select><button onclick="genVoice($('#v-lang').value)">新增 / 重做此語言</button></div></div></details>
     <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted)">上傳真人照片 / 聲音（需授權）</summary>${consentBlock("u")}<div style="margin-top:8px"><button onclick="uploadMore()">上傳</button></div></details>
     <h2>演出作品 <span class="badge">${films.length}</span></h2>
     ${films.length ? `<div class="films">${films.map(f => `<div class="film" onclick="open('${f.project}')">
@@ -501,11 +533,16 @@ function renderActor() {
       : `<div class="card" style="color:var(--muted)">還沒有演出作品。在影片描述中輸入 <b style="color:var(--accent)">@${esc(a.handle)}</b> 即可讓 ${esc(a.name)} 演出。</div>`}
   </div></div>`;
 }
-async function genPortraits(views, reseed = false) {
-  if (reseed && !confirm("重新產生所有定妝照會換一張臉；已完成的影片不受影響，之後的新鏡頭會用新長相。繼續？")) return;
-  await api(`/api/actors/${ACTOR.id}/portraits`, { method: "POST", body: JSON.stringify({ views, reseed }) }); setTimeout(() => openActor(ACTOR.id), 400);
+const actorPost = (path, body = {}) => api(`/api/actors/${ACTOR.id}/${path}`, { method: "POST", body: JSON.stringify(body) }).then(() => setTimeout(() => openActor(ACTOR.id), 400));
+async function genLook(reseed) {
+  if (reseed && !confirm("換一張臉會重拍正面照，確認後側面、背面與自我介紹也會依新長相重做；已完成的影片不受影響。繼續？")) return;
+  actorPost("look", { reseed });
 }
-async function genVoice() { await api(`/api/actors/${ACTOR.id}/voice`, { method: "POST", body: "{}" }); setTimeout(() => openActor(ACTOR.id), 400); }
+async function approveLook() { await api(`/api/actors/${ACTOR.id}/approve-look`, { method: "POST" }); setTimeout(() => openActor(ACTOR.id), 300); }
+function genTurn() { actorPost("turnaround"); }
+function genView(v) { (ACTOR.look_views.includes(v) ? genLook(false) : actorPost(`view/${v}`)); }
+function genIntro() { actorPost("intro"); }
+function genVoice(lang) { actorPost("voice", lang ? { lang } : {}); }
 async function setPrimary(v) { ACTOR = await api(`/api/actors/${ACTOR.id}/primary/${v}`, { method: "POST" }); renderActor(); refreshActors(); }
 async function uploadMore() { try { const a = await uploadActorFiles(ACTOR.id, "u"); if (a) { openActor(ACTOR.id); refreshActors(); } } catch (e) { alert(e.message); } }
 async function delActor() {
@@ -516,13 +553,13 @@ function editActor() {
   clearTimeout(ACTOR_POLL);
   $("#main").innerHTML = `<h1><a href="#" onclick="goActors();return false">演員陣容</a> <span style="color:var(--muted)">/</span> <a href="#" onclick="openActor('${ACTOR.id}');return false">${esc(ACTOR.name)}</a> / 編輯</h1>
     <div class="card" id="e-form">${actorFields(ACTOR)}<div class="row" style="margin-top:14px;justify-content:flex-end">
-    <label class="chk" style="flex:0 0 auto;margin:0 12px 0 0"><input type="checkbox" id="e-regen"> 外貌已變更：重新生成定妝照</label>
+    <label class="chk" style="flex:0 0 auto;margin:0 12px 0 0"><input type="checkbox" id="e-regen"> 外貌已變更：依新設定重拍長相</label>
     <button style="flex:0 0 auto" onclick="openActor('${ACTOR.id}')">取消</button><button class="primary" style="flex:0 0 auto" onclick="saveActor()">儲存</button></div></div>`;
 }
 async function saveActor() {
   try {
     await api(`/api/actors/${ACTOR.id}`, { method: "PUT", body: JSON.stringify(readActorFields()) });
-    if ($("#e-regen").checked) await api(`/api/actors/${ACTOR.id}/portraits`, { method: "POST", body: "{}" });
+    if ($("#e-regen").checked) await api(`/api/actors/${ACTOR.id}/look`, { method: "POST", body: "{}" });
     await refreshActors(); openActor(ACTOR.id);
   } catch (e) { alert(e.message); }
 }

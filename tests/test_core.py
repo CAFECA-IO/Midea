@@ -132,8 +132,9 @@ def test_actor_create_mentions_and_prompt(ws):
     assert a.handle and b.handle == "chef_wang"
     assert AC.mentions(f"讓 @{a.handle} 採訪 @王大廚走進廚房") == [a.id, b.id]
     assert AC.mentions("@nobody here") == []
-    p = AC.portrait_prompt(a, "full_body")
-    assert "year-old" in p and "full-body" in p and a.name not in p
+    p = AC.portrait_prompt(a, "full_front")
+    assert "year-old" in p and "shoes" in p and a.name not in p
+    assert "behind" in AC.portrait_prompt(a, "full_back")
     dup = AC.create({**AC.draft("x"), "handle": a.handle})
     assert dup.handle != a.handle                      # handles stay unique
 
@@ -143,13 +144,20 @@ def test_actor_generation_and_filmography(ws):
     from midea.pipelines.runner import Runner, cast_prompt
     from midea.project import Project
     a = AC.create(AC.draft("28歲女生，咖啡師"))
-    AC.generate_portraits(a.id)
+    AC.generate_look(a.id)
+    a = AC.load(a.id)
+    assert {p.view for p in a.portraits} == set(AC.LOOK_VIEWS) and not a.look["approved"]
+    with pytest.raises(PermissionError):
+        AC.generate_turnaround(a.id)                    # the look must be approved first
+    AC.approve_look(a.id, start_jobs=False)
+    AC.generate_turnaround(a.id)
     AC.generate_voice(a.id)
     a = AC.load(a.id)
-    assert {p.view for p in a.portraits} == set(AC.DEFAULT_VIEWS)
-    assert (AC.adir(a.id) / a.voice.sample).exists() and len(AC.ref_images(a)) == 2
+    assert [p.view for p in a.portraits] == AC.VIEW_ORDER
+    assert all(p.look_version == a.look["version"] for p in a.portraits)
+    assert (AC.adir(a.id) / a.voice.sample).exists() and len(AC.ref_images(a)) == 3
     prompt, refs = cast_prompt(f"@{a.handle} pours latte art, close-up", [a])
-    assert "<Picture 1>" in prompt and "@" not in prompt and len(refs) == 2
+    assert "<Picture 1>" in prompt and "@" not in prompt and len(refs) == 3
     assert a.name not in prompt and a.name_en not in prompt          # names would be painted onto signage
     p = Project.create({"prompt": f"@{a.handle} 介紹一杯好咖啡", "duration_s": 20, "music": False}, "cinematic")
     r = Runner(p, auto_approve=True)
@@ -173,3 +181,31 @@ def test_actor_upload_requires_consent(ws, tmp_path):
         AC.add_upload(a.id, "portrait", img, consent=False)
     a = AC.add_upload(a.id, "portrait", img, consent=True, note="授權書 #42")
     assert a.consent.real_person and a.consent.attested and "portrait" in a.consent.scope
+
+
+def test_actor_intro_video_and_staleness(ws):
+    from midea import actors as AC
+    from midea.media import ff
+    a = AC.create(AC.draft("35歲男性 攝影師"))
+    AC.generate_look(a.id, auto_approve=True)
+    AC.generate_turnaround(a.id)
+    a = AC.generate_intro(a.id)
+    assert a.intro["status"] == "pass" and (AC.adir(a.id) / a.intro["file"]).exists()
+    assert ff.duration(AC.adir(a.id) / a.intro["file"]) >= 5 and a.intro["text"]
+    assert AC.staleness(a) == {"look": False, "views": [], "intro": False}
+    a = AC.edit(a.id, {"appearance": {"hair": "光頭"}})
+    assert a.look["stale"]
+    AC.generate_look(a.id, auto_approve=True)          # a new look makes the turnaround and the intro stale
+    st = AC.staleness(AC.load(a.id))
+    assert set(st["views"]) == set(AC.TURN_VIEWS) and st["intro"]
+    AC.generate_voice(a.id, lang="en")                  # second language is cloned from the primary voice
+    a = AC.load(a.id)
+    assert a.voice.samples["en"]["source"] == "cloned" and AC.voice_ref(a, "en").endswith(".wav")
+
+
+def test_cer_normalises_script_and_punctuation():
+    from midea.actors import _cer
+    assert _cer("早安，今天想喝點什麼？", "早安,今天想喝点什么?") == 0.0
+    assert _cer("Hello there, friend.", "hello there friend") == 0.0
+    assert _cer("the quick brown fox", "the quick red fox") == 0.25   # English: word level
+    assert _cer("我是林予晴", "我是林雨晴") == 0.0             # homophone in a name is not a speech error

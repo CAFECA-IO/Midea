@@ -160,14 +160,51 @@ def actor_portraits(ref: str, views: list[str] | None = None, reseed: bool = Fal
     return AC.summary(AC.generate_portraits(a.id, views, reseed=reseed))
 
 
+@tool("actor.look", "actor", service="h3", est_seconds=lambda **_: 60)
+def actor_look(ref: str, reseed: bool = False, auto_approve: bool = False) -> dict:
+    """Render the actor's look (front headshot + head-to-toe front photo, one seed) for approval."""
+    from .. import actors as AC
+    a = AC.find(ref)
+    if not a:
+        raise KeyError(ref)
+    return AC.summary(AC.generate_look(a.id, reseed=reseed, auto_approve=auto_approve))
+
+
+@tool("actor.turnaround", "actor", service="h3", est_seconds=lambda **_: 120)
+def actor_turnaround(ref: str, views: list[str] | None = None) -> dict:
+    """Derive three-quarter / side / back photos from the approved look (Qwen-Image-Edit + pose checks)."""
+    from .. import actors as AC
+    a = AC.find(ref)
+    if not a:
+        raise KeyError(ref)
+    return AC.summary(AC.generate_turnaround(a.id, views))
+
+
+@tool("actor.intro", "actor", service="h3", est_seconds=lambda **_: 300)
+def actor_intro(ref: str, text: str | None = None, lang: str | None = None) -> dict:
+    """Talking self-introduction video (H3 lip-sync to the actor's cloned voice, Whisper + speaker-ID checked)."""
+    from .. import actors as AC
+    a = AC.find(ref)
+    if not a:
+        raise KeyError(ref)
+    return AC.summary(AC.generate_intro(a.id, lang=lang, text=text))
+
+
+@tool("image.edit", "generate", service="h3", est_seconds=lambda **_: 30)
+def image_edit(prompt: str, images: list[str], out: str, seed: int | None = None) -> str:
+    """Qwen-Image-Edit-2511: edit image 1 using up to two more reference images (identity / product consistent)."""
+    from ..providers.image_edit import edit
+    return str(edit(prompt, images, Path(out), seed=seed))
+
+
 @tool("actor.voice", "actor", service="voxcpm", est_seconds=lambda **_: 20)
-def actor_voice(ref: str, text: str | None = None) -> dict:
+def actor_voice(ref: str, text: str | None = None, lang: str | None = None) -> dict:
     """Design the actor's voice with VoxCPM2; the sample becomes the cloning reference for every line."""
     from .. import actors as AC
     a = AC.find(ref)
     if not a:
         raise KeyError(ref)
-    return AC.summary(AC.generate_voice(a.id, text))
+    return AC.summary(AC.generate_voice(a.id, text, lang))
 
 
 @tool("actor.find", "actor")

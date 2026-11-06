@@ -100,7 +100,7 @@ def _h3_prompt(prompt: str, camera: str, style: str) -> str:
 CAST_PROMPT_VERSION = 2       # bump when cast_prompt changes so cached actor shots are regenerated
 
 
-def cast_prompt(body: str, cast: list, per_actor: int = 2) -> tuple[str, list[str]]:
+def cast_prompt(body: str, cast: list, per_actor: int = 3) -> tuple[str, list[str]]:
     """Ref2VA prompt: bind each actor to their reference pictures and refer to them only through those
     tags. Names are never put in the prompt: video models paint them onto signs and walls."""
     refs: list[str] = []
@@ -415,8 +415,9 @@ class Runner:
             v_desc, v_ref, who = (None if ref_wav else voice), ref_wav, ""
             actor = cast.get(sc.get("speaker") or "")
             if actor:                                    # the actor speaks in their own (cloned) voice
-                actor = cast[actor.id] = AC.ensure_ready(actor, need_voice=True)
-                v_desc, v_ref, who = None, str(AC.adir(actor.id) / actor.voice.sample), actor.id
+                lang = self.brief.get("language")
+                actor = cast[actor.id] = AC.ensure_ready(actor, need_voice=True, lang=lang)
+                v_desc, v_ref, who = None, AC.voice_ref(actor, lang), actor.id
             old = json.loads(marker.read_text()) if marker.exists() else {}
             stale = old.get("mock") != mock_now or old.get("text") != sc["narration"] or old.get("speaker", "") != who \
                 or old.get("ref") != v_ref
@@ -489,7 +490,7 @@ class Runner:
             prompt = _h3_prompt(v.get("prompt", ""), v.get("camera", ""), self.p.stage_data("proposal", {}).get("style", ""))
             prev = self._prev_h3_scene(plan, index)
             if kind == "h3_r2v" and cast:
-                prompt, refs = cast_prompt(prompt, cast, int(settings().get("actors.refs_per_actor", 2)))
+                prompt, refs = cast_prompt(prompt, cast, int(settings().get("actors.refs_per_actor", 3)))
                 if lip_wav:                            # the actor says the line on camera, voiced like <Audio 1>
                     who = "She" if cast[0].gender == "female" else "He" if cast[0].gender == "male" else "They"
                     prompt += (f" {who} faces the camera and clearly says, in exactly the voice, timing and tone of <Audio 1>: "

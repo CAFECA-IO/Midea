@@ -249,6 +249,7 @@ class ActorGen(BaseModel):
     views: list[str] | None = None
     reseed: bool = False
     text: str | None = None
+    lang: str | None = None
 
 
 def _actor(aid: str) -> AC.Actor:
@@ -261,7 +262,10 @@ def _actor(aid: str) -> AC.Actor:
 def _actor_full(a: AC.Actor) -> dict:
     d = a.model_dump()
     d["films"] = AC.filmography(a.id)
-    d["views"] = {k: v["zh"] for k, v in AC.VIEWS.items()}
+    d["views"] = {k: AC.VIEWS[k]["zh"] for k in AC.VIEW_ORDER}
+    d["look_views"], d["turn_views"] = AC.LOOK_VIEWS, AC.TURN_VIEWS
+    d["stale"] = AC.staleness(a)
+    d["legacy"] = [p.view for p in a.portraits if p.view in AC.LEGACY]
     d["voice_prompt"] = AC.voice_prompt(a)
     d["portrait_prompt"] = AC.portrait_prompt(a, a.primary if a.primary in AC.VIEWS else "headshot")
     return d
@@ -288,7 +292,7 @@ def actors_create(body: dict) -> dict:
     if consent:
         AC.update(a.id, lambda x: setattr(x, "consent", AC.Consent(**consent)))
     if gen:
-        AC.run_job(a.id, "portraits")
+        AC.run_job(a.id, "look")
         AC.run_job(a.id, "voice")
     return _actor_full(AC.load(a.id))
 
@@ -314,16 +318,49 @@ def actors_delete(aid: str) -> dict:
     return {"ok": True}
 
 
-@app.post("/api/actors/{aid}/portraits")
-def actors_portraits(aid: str, req: ActorGen) -> dict:
+@app.post("/api/actors/{aid}/look")
+@app.post("/api/actors/{aid}/portraits")            # older boards
+def actors_look(aid: str, req: ActorGen) -> dict:
     _actor(aid)
-    return {"started": AC.run_job(aid, "portraits", views=req.views, reseed=req.reseed)}
+    return {"started": AC.run_job(aid, "look", reseed=req.reseed)}
+
+
+@app.post("/api/actors/{aid}/approve-look")
+def actors_approve(aid: str) -> dict:
+    a = _actor(aid)
+    if not all(v in {AC.view_of(p) for p in a.portraits} for v in AC.LOOK_VIEWS):
+        raise HTTPException(400, "還沒有正面大頭照與正面全身照")
+    return _actor_full(AC.approve_look(aid, by="board"))
+
+
+@app.post("/api/actors/{aid}/turnaround")
+def actors_turnaround(aid: str, req: ActorGen) -> dict:
+    if not _actor(aid).look.get("approved"):
+        raise HTTPException(400, "請先確認長相")
+    return {"started": AC.run_job(aid, "turnaround", views=req.views)}
+
+
+@app.post("/api/actors/{aid}/view/{view}")
+def actors_view(aid: str, view: str) -> dict:
+    _actor(aid)
+    if view not in AC.VIEWS:
+        raise HTTPException(400, "unknown view")
+    if view in AC.LOOK_VIEWS:
+        return {"started": AC.run_job(aid, "look")}
+    return {"started": AC.run_job(aid, "view", view=view)}
+
+
+@app.post("/api/actors/{aid}/intro")
+def actors_intro(aid: str, req: ActorGen) -> dict:
+    if not _actor(aid).look.get("approved"):
+        raise HTTPException(400, "請先確認長相")
+    return {"started": AC.run_job(aid, "intro", text=req.text, lang=req.lang)}
 
 
 @app.post("/api/actors/{aid}/voice")
 def actors_voice(aid: str, req: ActorGen) -> dict:
     _actor(aid)
-    return {"started": AC.run_job(aid, "voice", text=req.text)}
+    return {"started": AC.run_job(aid, "voice", text=req.text, lang=req.lang)}
 
 
 @app.post("/api/actors/{aid}/primary/{view}")

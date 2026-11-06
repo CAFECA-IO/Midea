@@ -41,18 +41,44 @@ _job_lock = threading.Lock()     # actor jobs run one at a time
 
 HANDLE_RE = re.compile(r"@([\w㐀-鿿぀-ヿ가-힯][\w㐀-鿿぀-ヿ가-힯.\-]{0,31})")
 
+STUDIO = ("plain light grey seamless studio backdrop, soft diffused key light with gentle rim light, true-to-life colors, "
+          "photorealistic, natural skin texture, ultra detailed, no text, no watermark")
+
+# engine "zimage": rendered from text (the "look" — approved by a human before anything else);
+# engine "edit":   derived from the approved look with Qwen-Image-Edit so face / hair / outfit stay identical.
 VIEWS: dict[str, dict] = {
-    "headshot": {"zh": "正面大頭照", "size": (1024, 1024),
-                 "shot": "front-facing head-and-shoulders portrait, looking straight into the camera, relaxed neutral expression"},
-    "three_quarter": {"zh": "四分之三側臉", "size": (1024, 1024),
-                      "shot": "three-quarter view portrait, head turned 35 degrees to the left, slight natural smile"},
-    "profile": {"zh": "側面", "size": (1024, 1024),
-                "shot": "side profile portrait facing left, calm expression"},
-    "full_body": {"zh": "全身定裝", "size": (832, 1216),
-                  "shot": "full-body shot standing upright, front view, arms relaxed, entire figure visible from head to shoes"},
+    "headshot": {"zh": "正面大頭照", "engine": "zimage", "size": (1024, 1024),
+                 "shot": "front-facing head-and-shoulders portrait, looking straight into the camera, relaxed neutral "
+                         "expression, 85mm lens, sharp focus on the eyes"},
+    "full_front": {"zh": "正面全身", "engine": "zimage", "size": (768, 1344),
+                   "shot": "full-length photo of the whole body from the top of the head to the shoes, standing upright facing "
+                           "the camera, arms relaxed at the sides, feet and shoes fully visible on the studio floor, a wide margin "
+                           "of empty floor below the shoes and empty space above the head, photographed from a distance with a "
+                           "long lens at chest height, natural realistic body proportions"},
+    "three_quarter": {"zh": "四分之三側臉", "engine": "edit", "src": ["headshot", "full_front"], "size": None,
+                      "edit": "Show the same person from image 1 in a three-quarter view: head and shoulders, the head and body "
+                              "turned about 40 degrees to the left, eyes looking slightly off camera, gentle natural smile. Keep "
+                              "exactly the same face, hairstyle, makeup and clothes as image 1 and image 2. Same plain light grey "
+                              "studio background and soft lighting. Photorealistic portrait photo."},
+    "full_side": {"zh": "側面全身", "engine": "edit", "src": ["full_front", "headshot"], "size": None,
+                  "edit": "Show the same person from image 1 in a strict side view: a 90-degree profile facing left, the whole "
+                          "body from the top of the head to the shoes, standing upright, arms relaxed, feet and shoes fully visible "
+                          "on the floor with space above the head and below the feet. Keep exactly the same face as image 2 and the "
+                          "same hairstyle, outfit and shoes as image 1. Same plain light grey studio background and lighting. "
+                          "Photorealistic full-length photo."},
+    "full_back": {"zh": "背面全身", "engine": "edit", "src": ["full_front"], "size": None,
+                  "edit": "Show the same person from image 1 from directly behind: a back view of the whole body from the top of "
+                          "the head to the shoes, the face is not visible, standing upright, arms relaxed, feet and shoes fully "
+                          "visible on the floor with space above the head and below the feet. Keep exactly the same hairstyle seen "
+                          "from the back, the same outfit and the same shoes as image 1. Same plain light grey studio background "
+                          "and lighting. Photorealistic full-length photo."},
 }
-DEFAULT_VIEWS = ["headshot", "three_quarter", "full_body", "profile"]
-REF_VIEWS = ["headshot", "full_body"]          # what H3 Ref2VA gets per actor (≤ 9 images per shot)
+LOOK_VIEWS = ["headshot", "full_front"]
+TURN_VIEWS = ["three_quarter", "full_side", "full_back"]
+DEFAULT_VIEWS = LOOK_VIEWS + TURN_VIEWS
+VIEW_ORDER = ["headshot", "three_quarter", "full_front", "full_side", "full_back"]
+REF_VIEWS = ["headshot", "full_front", "full_side"]   # what H3 Ref2VA gets per actor (≤ 9 images per shot)
+LEGACY = {"full_body": "full_front", "profile": "full_side"}    # pre-turnaround actors
 
 
 # ---------------------------------------------------------------- data model
@@ -93,6 +119,8 @@ class Voice(_M):
     sample: str = ""                # 相對於演員資料夾的 wav
     source: Literal["designed", "uploaded", "none"] = "none"
     mock: bool = False              # 以 mock 模式產生（真模型上線後自動重做）
+    stale: bool = False             # 聲音描述改了，標準聲音需要重做
+    samples: dict = Field(default_factory=dict)   # 依語言保存的標準聲音 {lang: {file, text, source, mock}}
 
 
 class Consent(_M):
@@ -111,6 +139,9 @@ class Portrait(_M):
     prompt: str = ""
     source: Literal["generated", "uploaded", "mock"] = "generated"
     at: float = 0
+    engine: str = "zimage"
+    look_version: int = 0           # 由第幾版「長相」產生（長相重做後，舊的三視圖即過期）
+    qa: dict = Field(default_factory=dict)        # 自動驗收結果 {status, score, issues, metrics, attempts}
 
 
 class Actor(_M):
@@ -134,6 +165,8 @@ class Actor(_M):
     primary: str = "headshot"
     seed: int = 0
     consent: Consent = Field(default_factory=Consent)
+    look: dict = Field(default_factory=lambda: {"version": 0, "approved": False})   # 定妝確認
+    intro: dict = Field(default_factory=dict)     # 自我介紹說話影片 {file, poster, text, lang, cer, similarity, …}
     jobs: dict = Field(default_factory=dict)        # {"portraits": {...}, "voice": {...}}
     cost: dict = Field(default_factory=lambda: {"actual": 0.0, "lines": []})
     created: float = 0
@@ -272,8 +305,14 @@ def edit(aid: str, patch: dict) -> Actor:
                 cur[k] = v
         b = Actor(**cur)
         b.handle = _unique_handle(b.handle, exclude=a.id)
+        looks = lambda x: (x.age, x.gender, x.appearance.model_dump(), x.wardrobe_en, x.wardrobe)  # noqa: E731
+        if looks(a) != looks(b) and a.portraits:
+            a.look["stale"] = True             # the photos no longer match the profile — regenerate the look
+        voice_changed = (a.voice.description, a.voice.description_zh) != (b.voice.description, b.voice.description_zh)
         for k in EDITABLE:
             setattr(a, k, getattr(b, k))
+        if voice_changed and a.voice.sample:
+            a.voice.stale = True               # the canonical sample no longer matches the description
     return update(aid, f)
 
 
@@ -304,20 +343,23 @@ def look_en(a: Actor) -> str:
 
 
 def portrait_prompt(a: Actor, view: str) -> str:
-    v = VIEWS[view]
+    v = VIEWS.get(view) or VIEWS[LEGACY.get(view, "headshot")]
+    if v["engine"] == "edit":
+        return v["edit"]
     wardrobe = a.wardrobe_en or (a.wardrobe if a.wardrobe.isascii() else "")
     parts = [f"Photorealistic studio photograph of a {person_en(a)}", look_en(a),
-             f"wearing {wardrobe}" if wardrobe else "", v["shot"],
-             "plain light grey seamless studio backdrop, soft diffused key light with gentle rim light, "
-             "85mm lens, sharp focus on the eyes, natural skin texture with pores, true-to-life colors, "
-             "ultra detailed, no text, no watermark"]
+             f"wearing {wardrobe}" if wardrobe else "", v["shot"], STUDIO]
     return ". ".join(p for p in parts if p)
+
+
+def view_of(p: "Portrait") -> str:
+    return LEGACY.get(p.view, p.view)
 
 
 def ref_images(a: Actor, views: list[str] | None = None) -> list[str]:
     """Absolute paths of the actor's reference photos for H3 Ref2VA (primary first)."""
     order = [a.primary] + [v for v in (views or REF_VIEWS) if v != a.primary]
-    by_view = {p.view: p for p in a.portraits}
+    by_view = {view_of(p): p for p in sorted(a.portraits, key=lambda p: p.view not in LEGACY)}   # real views win over legacy
     out = [str(adir(a.id) / by_view[v].file) for v in order if v in by_view and (adir(a.id) / by_view[v].file).exists()]
     if not out and a.portraits:
         out = [str(adir(a.id) / a.portraits[0].file)]
@@ -427,79 +469,370 @@ def _set_job(aid: str, name: str, **kw) -> None:
     update(aid, lambda a: a.jobs.__setitem__(name, {**a.jobs.get(name, {}), **kw, "at": time.time()}))
 
 
-def generate_portraits(aid: str, views: list[str] | None = None, *, reseed: bool = False) -> Actor:
-    """Render costume photos with Z-Image-Turbo. Same seed across views keeps the face consistent."""
-    from .gpu import scheduler
-    from .providers import image_zimage as Z
+def _archive(aid: str, rel: str, sub: str) -> None:
+    src = adir(aid) / rel
+    if rel and src.exists():
+        (adir(aid) / sub / "archive").mkdir(parents=True, exist_ok=True)
+        src.replace(adir(aid) / sub / "archive" / src.name)
+
+
+def _image_mock() -> bool:
+    return settings().mocked((settings().get("image", {}) or {}).get("service", "h3"))
+
+
+def _render_view(a: Actor, view: str, seed: int, out: Path) -> None:
+    v = VIEWS[view]
+    label = f"{a.name} · {v['zh']}"
+    if v["engine"] == "zimage":
+        from .providers import image_zimage as Z
+        w, h = v["size"]
+        Z.generate(portrait_prompt(a, view), out, width=w, height=h, seed=seed, label=label)
+    else:
+        from .providers import image_edit as E
+        by = {view_of(p): p for p in a.portraits}
+        srcs = [str(adir(a.id) / by[s].file) for s in v["src"] if s in by]
+        if not srcs:
+            raise RuntimeError(f"{view} needs the approved look photos first ({', '.join(v['src'])})")
+        E.edit(portrait_prompt(a, view), srcs, out, seed=seed, label=label)
+
+
+def _render_checked(aid: str, view: str, base_seed: int, attempts: int | None = None) -> Portrait:
+    """Render a view, run the automatic acceptance check and retry with new seeds; keep the best attempt."""
+    from . import vision_check as VC
+    attempts = attempts or int(settings().get("actors.view_attempts", 3))
     a = load(aid)
-    views = [v for v in (views or DEFAULT_VIEWS) if v in VIEWS]
-    if reseed:
-        a = update(aid, lambda x: setattr(x, "seed", (x.seed + 7919) % 2_000_000_000))
-    mock = settings().mocked((settings().get("image", {}) or {}).get("service", "h3"))
-    _set_job(aid, "portraits", status="running", views=views, done=0, error="")
+    best: tuple[float, Path, dict, int] | None = None
+    tried = []
+    for k in range(attempts):
+        seed = (base_seed + k * 104729) % 2_000_000_000
+        out = adir(aid) / f"portraits/{view}_{int(time.time() * 1000)}.png"
+        _render_view(a, view, seed, out)
+        qa = VC.check(view, out)
+        if view.startswith("full_") and qa["issues"] == ["腳底貼齊或超出畫面下緣"] \
+                and VC.fix_floor_margin(out, qa["metrics"].get("feet_bottom", 0)):
+            qa = VC.check(view, out)                      # recheck after extending the studio floor
+            qa["fixed"] = "floor_margin"
+        tried.append({"seed": seed, "status": qa["status"], "issues": qa["issues"]})
+        log.info("%s %s attempt %d: %s %s", aid, view, k + 1, qa["status"], qa["issues"])
+        if best is None or qa["score"] > best[0]:
+            if best:
+                best[1].unlink(missing_ok=True)
+            best = (qa["score"], out, qa, seed)
+        else:
+            out.unlink(missing_ok=True)
+        if qa["status"] in ("pass", "skip"):
+            break
+    _, out, qa, seed = best
+    qa = {**qa, "attempts": tried, "status": qa["status"] if qa["status"] != "fail" else "warn"}
+    return Portrait(view=view, file=str(out.relative_to(adir(aid))), seed=seed, prompt=portrait_prompt(a, view),
+                    source="mock" if _image_mock() else "generated", engine=VIEWS[view]["engine"],
+                    look_version=a.look.get("version", 0), at=time.time(), qa=qa)
+
+
+def _put_portrait(aid: str, p: Portrait) -> None:
+    def f(x: Actor) -> None:
+        for old in [q for q in x.portraits if view_of(q) == p.view]:
+            _archive(aid, old.file, "portraits")
+        x.portraits = [q for q in x.portraits if view_of(q) != p.view] + [p]
+        x.portraits.sort(key=lambda q: VIEW_ORDER.index(q.view) if q.view in VIEW_ORDER else 99)
+        if x.primary not in VIEWS:
+            x.primary = "headshot"
+    update(aid, f)
+
+
+def _job(aid: str, name: str, fn):
+    from .gpu import scheduler
+    _set_job(aid, name, status="running", error="", done=0)
     try:
         with scheduler().billing(_bill(aid)):
-            for i, view in enumerate(views):
-                w, h = VIEWS[view]["size"]
-                prompt = portrait_prompt(a, view)
-                rel = f"portraits/{view}_{int(time.time())}.png"
-                Z.generate(prompt, adir(aid) / rel, width=w, height=h, seed=a.seed, label=f"{a.name} · {VIEWS[view]['zh']}")
-
-                def put(x: Actor, view=view, rel=rel, prompt=prompt) -> None:
-                    old = [p for p in x.portraits if p.view == view]
-                    for p in old:                             # keep only the latest per view (older ones archived)
-                        src = adir(aid) / p.file
-                        if src.exists():
-                            (adir(aid) / "portraits" / "archive").mkdir(exist_ok=True)
-                            src.replace(adir(aid) / "portraits" / "archive" / src.name)
-                    x.portraits = [p for p in x.portraits if p.view != view] + [
-                        Portrait(view=view, file=rel, seed=x.seed, prompt=prompt, source="mock" if mock else "generated", at=time.time())]
-                    x.portraits.sort(key=lambda p: DEFAULT_VIEWS.index(p.view) if p.view in DEFAULT_VIEWS else 99)
-                    x.jobs["portraits"] = {**x.jobs.get("portraits", {}), "done": i + 1, "at": time.time()}
-                update(aid, put)
-        _set_job(aid, "portraits", status="done")
+            out = fn()
+        _set_job(aid, name, status="done")
+        return out
     except Exception as e:  # noqa: BLE001
-        log.error("portraits for %s failed: %s", aid, e)
-        _set_job(aid, "portraits", status="error", error=str(e)[:500], trace=traceback.format_exc()[-1500:])
+        log.error("%s for %s failed: %s", name, aid, e)
+        _set_job(aid, name, status="error", error=str(e)[:500], trace=traceback.format_exc()[-1500:])
         raise
+
+
+def generate_look(aid: str, *, reseed: bool = False, auto_approve: bool = False) -> Actor:
+    """Step 1 — the look: Z-Image front headshot + head-to-toe front photo with one seed. Needs approval."""
+    if reseed:
+        update(aid, lambda x: setattr(x, "seed", (x.seed + 7919) % 2_000_000_000))
+
+    def run() -> None:
+        update(aid, lambda x: x.look.update(version=int(x.look.get("version", 0)) + 1, approved=False, stale=False, at=time.time()))
+        a = load(aid)
+        for i, view in enumerate(LOOK_VIEWS):
+            _put_portrait(aid, _render_checked(aid, view, a.seed))
+            _set_job(aid, "look", done=i + 1, total=len(LOOK_VIEWS))
+    _job(aid, "look", run)
+    if auto_approve:
+        approve_look(aid, by="auto", start_jobs=False)
     return load(aid)
 
 
-def generate_voice(aid: str, text: str | None = None) -> Actor:
-    """Design the actor's voice with VoxCPM2 and keep the sample as the cloning reference."""
-    from .gpu import scheduler
+def approve_look(aid: str, by: str = "user", start_jobs: bool = True) -> Actor:
+    a = update(aid, lambda x: x.look.update(approved=True, approved_by=by, approved_at=time.time()))
+    if start_jobs:
+        run_job(aid, "turnaround")
+        run_job(aid, "intro")
+    return a
+
+
+def generate_turnaround(aid: str, views: list[str] | None = None) -> Actor:
+    """Step 2 — derive three-quarter / side / back from the approved look with Qwen-Image-Edit."""
+    a = load(aid)
+    if not a.look.get("approved"):
+        raise PermissionError("請先確認長相（定妝確認）再展開三視圖")
+    views = [v for v in (views or TURN_VIEWS) if v in TURN_VIEWS]
+
+    def run() -> None:
+        for i, view in enumerate(views):
+            _put_portrait(aid, _render_checked(aid, view, a.seed + 31 * (i + 1)))
+            _set_job(aid, "turnaround", done=i + 1, total=len(views))
+    _job(aid, "turnaround", run)
+    return load(aid)
+
+
+def regenerate_view(aid: str, view: str) -> Actor:
+    a = load(aid)
+    if VIEWS[view]["engine"] == "zimage":
+        return generate_look(aid, reseed=False) if view in LOOK_VIEWS else a
+    seed = (int(time.time()) * 7 + a.seed) % 2_000_000_000
+    _job(aid, "turnaround", lambda: _put_portrait(aid, _render_checked(aid, view, seed)))
+    return load(aid)
+
+
+# ---------------------------------------------------------------- voices (one canonical sample per language)
+def voice_ref(a: Actor, lang: str | None = None) -> str | None:
+    """Absolute path of the canonical voice sample for `lang` (falls back to the primary sample)."""
+    lang = (lang or "").split("-")[0].lower()
+    for k, v in (a.voice.samples or {}).items():
+        if lang and k.split("-")[0].lower() == lang and (adir(a.id) / v.get("file", "")).is_file():
+            return str(adir(a.id) / v["file"])
+    if a.voice.sample and (adir(a.id) / a.voice.sample).is_file():
+        return str(adir(a.id) / a.voice.sample)
+    return None
+
+
+def generate_voice(aid: str, text: str | None = None, lang: str | None = None) -> Actor:
+    """Design the actor's voice with VoxCPM2; the sample becomes the cloning reference for that language.
+    A second language is cloned from the primary sample so the timbre stays the same person."""
     from .providers import audio as A
     a = load(aid)
-    if a.voice.source == "uploaded" and not text:
+    primary = (a.voice.language or "zh-TW")
+    lang = lang or primary
+    is_primary = lang.split("-")[0] == primary.split("-")[0]
+    if a.voice.source == "uploaded" and is_primary and not text:
         return a
-    text = text or a.voice.sample_text or default_sample_text(a)
-    _set_job(aid, "voice", status="running", error="")
-    try:
-        rel = f"voice/sample_{int(time.time())}.wav"
-        with scheduler().billing(_bill(aid)):
+    tmp = Actor(**{**a.model_dump(), "voice": {**a.voice.model_dump(), "language": lang}})
+    text = text or (a.voice.sample_text if is_primary else "") or default_sample_text(tmp)
+
+    def run() -> None:
+        rel = f"voice/sample_{lang}_{int(time.time())}.wav"
+        base = voice_ref(a, primary)
+        if is_primary or not base:
             A.tts(text, adir(aid) / rel, voice=voice_prompt(a))
+        else:
+            A.tts(text, adir(aid) / rel, reference_wav=base)
+
         def put(x: Actor) -> None:
-            if x.voice.sample and (adir(aid) / x.voice.sample).exists():
-                (adir(aid) / "voice" / "archive").mkdir(parents=True, exist_ok=True)
-                (adir(aid) / x.voice.sample).replace(adir(aid) / "voice" / "archive" / Path(x.voice.sample).name)
-            x.voice.sample, x.voice.sample_text, x.voice.source = rel, text, "designed"
-            x.voice.mock = settings().mocked("voxcpm")  # noqa: B010
+            old = (x.voice.samples or {}).get(lang, {})
+            _archive(aid, old.get("file", ""), "voice")
+            entry = {"file": rel, "text": text, "source": "designed" if is_primary else "cloned",
+                     "mock": settings().mocked("voxcpm"), "at": time.time()}
+            x.voice.samples = {**(x.voice.samples or {}), lang: entry}
+            if is_primary:
+                if x.voice.sample and x.voice.sample != rel and x.voice.sample != old.get("file"):
+                    _archive(aid, x.voice.sample, "voice")
+                x.voice.sample, x.voice.sample_text, x.voice.source = rel, text, "designed"
+                x.voice.mock = settings().mocked("voxcpm")
+                x.voice.stale = False
         update(aid, put)
-        _set_job(aid, "voice", status="done")
-    except Exception as e:  # noqa: BLE001
-        _set_job(aid, "voice", status="error", error=str(e)[:500])
-        raise
+    _job(aid, "voice", run)
     return load(aid)
+
+
+# ---------------------------------------------------------------- talking intro video
+INTRO_SYSTEM = """You write a short first-person self-introduction for a virtual actor's casting reel.
+It is spoken to camera in the requested language, in the actor's own personality, natural and warm, with one
+concrete personal detail from the bio. Keep it SHORT: 4–6 seconds when spoken (Chinese 16–24 characters, one or
+two short clauses; English 10–15 words) — longer lines make the lip-synced video garble the middle.
+No hashtags, no emojis, no stage directions. JSON {"text": "..."}"""
+
+
+def intro_text(a: Actor, lang: str, max_s: float | None = None) -> str:
+    from .providers.llm import llm
+    if settings().mocked("qwen"):
+        return (f"Hi, I'm {a.name_en or a.name}. I love quiet mornings and good stories." if lang.startswith("en")
+                else f"你好，我是{a.name}。我喜歡安靜的早晨，也喜歡好故事。")
+    ask = {"language": lang, "actor": bible(a)}
+    if max_s:
+        ask["constraint"] = f"The previous line was too long. At most {max_s:.0f} seconds spoken — one short sentence."
+    r = llm().json("actor_intro", INTRO_SYSTEM, json.dumps(ask, ensure_ascii=False))
+    t = str((r or {}).get("text", "")).strip() if isinstance(r, dict) else ""
+    return t or default_sample_text(a)[:40]
+
+
+def _cer(ref: str, hyp: str) -> float:
+    """Character error rate after normalising punctuation, case, simplified/traditional script and — for
+    Chinese — pronunciation (toneless pinyin), so a homophone in a name (予 / 雨) is not a speech error."""
+    import difflib
+    def norm(x: str) -> list[str]:
+        x = re.sub(r"[\W_]+", " ", x.lower()).strip()
+        try:
+            from opencc import OpenCC
+            x = OpenCC("t2s").convert(x)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            from pypinyin import lazy_pinyin
+            return [w for t in lazy_pinyin(x) for w in t.split()]   # one token per CJK character / latin word
+        except Exception:  # noqa: BLE001
+            return [w for t in re.findall(r"[a-z0-9]+|\S", x) for w in [t]]
+    r, h = norm(ref), norm(hyp)
+    if not r:
+        return 0.0
+    sm = difflib.SequenceMatcher(None, r, h, autojunk=False)
+    return round(1 - sum(b.size for b in sm.get_matching_blocks()) / max(len(r), len(h)), 3)
+
+
+def generate_intro(aid: str, lang: str | None = None, text: str | None = None) -> Actor:
+    """Step 3 — a 6–10 s talking video: Qwen writes the lines, VoxCPM2 speaks them in the actor's voice,
+    MiniMax H3 Ref2VA renders the actor saying them (<Audio 1> = the line), then Whisper (wording) and an
+    ECAPA speaker embedding (same voice as the canonical sample) accept or reject the take."""
+    from .media import ff
+    from .providers import audio as A
+    from .providers.asr import transcribe
+    from .providers.video_h3 import h3
+    a = load(aid)
+    lang = lang or a.voice.language or "zh-TW"
+    if not a.look.get("approved"):
+        raise PermissionError("請先確認長相（定妝確認）再拍攝自我介紹")
+
+    def run() -> None:
+        nonlocal a
+        if not voice_ref(a, lang):
+            a = generate_voice(aid, lang=lang)
+        ref_voice = voice_ref(a, lang)
+        line = text or intro_text(a, lang)
+        d = adir(aid) / "intro"
+        d.mkdir(exist_ok=True)
+        ts = int(time.time())
+        wav = d / f"line_{ts}.wav"
+        A.tts(line, wav, reference_wav=ref_voice)
+        dur = ff.duration(wav)
+        max_line = float(settings().get("actors.intro_line_max_s", 6.5))
+        if dur > max_line and not text:            # too long for a clean lip-synced take: ask for a shorter one
+            short = intro_text(a, lang, max_s=max_line)
+            if short and short != line:
+                line = short
+                A.tts(line, wav, reference_wav=ref_voice)
+                dur = ff.duration(wav)
+        seconds = int(min(9, max(5, round(dur + 2.5))))   # longer clips invite H3 to insert cuts
+        refs = ref_images(a, ["headshot", "full_front"])[:2]
+        noun = person_en(a).split("-old ")[-1]
+        pron = {"female": "She", "male": "He"}.get(a.gender, "They")
+        tags = " and ".join(f"<Picture {i + 1}>" for i in range(len(refs)))
+        prompt = (f"{tags} show the same {person_en(a)}. Medium shot of the {noun} from <Picture 1> standing in front of a "
+                  f"plain light grey seamless studio backdrop with soft diffused studio light, facing the camera at eye level. "
+                  f"{pron} introduces {'herself' if pron == 'She' else 'himself' if pron == 'He' else 'themselves'} warmly "
+                  f"with small natural gestures and clearly says, in exactly the voice, timing and tone of <Audio 1>: "
+                  f"\u201c{line}\u201d. Natural lip movements matching the speech. Same face, hairstyle and outfit as the "
+                  f"reference pictures. One continuous take from a static camera: no cuts, no zoom, no transitions.")
+        attempts = int(settings().get("actors.intro_attempts", 3))
+        sim_min = float(settings().get("actors.voice_similarity_min", 0.5))
+        cer_max = float(settings().get("actors.intro_cer_max", 0.25))
+        best = None
+        takes = []
+        for k in range(attempts):
+            seed = (a.seed + 977 * (k + 1)) % 2_000_000_000
+            raw = d / f"raw_{ts}_{k}.mp4"
+            h3().generate(prompt, raw, seconds=seconds, aspect="4:5", mode="r2v", ref_images=refs,
+                          ref_audios=[str(wav)], seed=seed)
+            vid = d / f"intro_{ts}_{k}.mp4"            # web-friendly H.264/AAC, speech at -16 LUFS
+            ff.run(["-i", raw, "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k",
+                    "-af", "loudnorm=I=-16:TP=-1.5", "-ar", "48000", "-movflags", "+faststart", vid])
+            raw.unlink(missing_ok=True)
+            spoken = d / f"take_{ts}_{k}.wav"
+            ff.run(["-i", vid, "-vn", "-ac", "1", "-ar", "16000", spoken])
+            heard = " ".join(s["text"] for s in transcribe(spoken, lang)["segments"]) if not settings().mocked("whisper") else line
+            cer = _cer(line, heard)
+            sim = A.speaker_similarity(str(spoken), ref_voice)
+            from . import vision_check as VC
+            cuts = [] if settings().mocked("h3") else VC.framing_jumps(vid)
+            ok = cer <= cer_max and sim >= sim_min and not cuts
+            take = {"seed": seed, "cer": cer, "similarity": sim, "cuts": len(cuts), "heard": heard, "pass": ok,
+                    "file": f"intro/{vid.name}"}
+            takes.append(take)
+            log.info("%s intro take %d: cer=%.3f sim=%.3f cuts=%d %s", aid, k + 1, cer, sim, len(cuts), "PASS" if ok else "retry")
+            score = sim - cer - 0.5 * len(cuts)
+            if best is None or score > best[0]:
+                if best:
+                    (adir(aid) / best[1]["file"]).unlink(missing_ok=True)
+                best = (score, take)
+            else:
+                vid.unlink(missing_ok=True)
+            spoken.unlink(missing_ok=True)
+            _set_job(aid, "intro", done=k + 1, total=attempts)
+            if ok:
+                break
+        take = best[1]
+        poster = d / f"poster_{ts}.jpg"
+        ff.run(["-ss", "1.0", "-i", adir(aid) / take["file"], "-frames:v", "1", "-q:v", "3", poster])
+
+        def put(x: Actor) -> None:
+            for k2 in ("file", "poster", "line_wav"):
+                if x.intro.get(k2):
+                    _archive(aid, x.intro[k2], "intro")
+            x.intro = {"file": take["file"], "poster": f"intro/{poster.name}", "line_wav": f"intro/{wav.name}",
+                       "text": line, "lang": lang, "heard": take["heard"], "cer": take["cer"],
+                       "similarity": take["similarity"], "status": "pass" if take["pass"] else "warn",
+                       "takes": [{k3: t[k3] for k3 in ("seed", "cer", "similarity", "cuts", "pass")} for t in takes], "cuts": take["cuts"],
+                       "look_version": x.look.get("version", 0), "voice_ref": Path(ref_voice).name,
+                       "mock": settings().mocked("h3"), "at": time.time()}
+        update(aid, put)
+    _job(aid, "intro", run)
+    return load(aid)
+
+
+def recheck(aid: str) -> Actor:
+    """Re-run the automatic photo acceptance checks (e.g. after tuning verify.* thresholds)."""
+    from . import vision_check as VC
+
+    def f(x: Actor) -> None:
+        for p in x.portraits:
+            v = view_of(p)
+            if v in VIEWS and (adir(aid) / p.file).exists():
+                qa = VC.check(v, adir(aid) / p.file)
+                p.qa = {**p.qa, **qa, "status": qa["status"] if qa["status"] != "fail" else "warn", "rechecked": time.time()}
+    return update(aid, f)
+
+
+def staleness(a: Actor) -> dict:
+    """What is out of date after the look or the voice changed."""
+    v = int(a.look.get("version", 0))
+    out: dict = {"look": bool(a.look.get("stale")), "views": [], "intro": False}
+    for p in a.portraits:
+        if p.view in TURN_VIEWS and p.look_version != v:
+            out["views"].append(p.view)
+    if a.intro.get("file"):
+        ref = voice_ref(a, a.intro.get("lang"))
+        out["intro"] = a.intro.get("look_version") != v or (ref is not None and Path(ref).name != a.intro.get("voice_ref"))
+    return out
+
+
+JOBS = {"look": generate_look, "turnaround": generate_turnaround, "intro": generate_intro, "voice": generate_voice,
+        "view": regenerate_view}
 
 
 def run_job(aid: str, kind: str, **kw) -> bool:
-    """Start a background generation job; returns False when one is already running for this actor."""
+    """Start a background generation job; returns False when one is already queued/running for this actor."""
     key = f"{aid}:{kind}"
     if key in _jobs and _jobs[key].is_alive():
         return False
-    fn = {"portraits": generate_portraits, "voice": generate_voice}[kind]
-
-    _set_job(aid, kind, status="queued", error="")
+    fn = JOBS[kind]
+    _set_job(aid, "turnaround" if kind == "view" else kind, status="queued", error="")
 
     def go() -> None:
         with _job_lock:
@@ -512,19 +845,32 @@ def run_job(aid: str, kind: str, **kw) -> bool:
     return True
 
 
-def ensure_ready(a: Actor, *, need_portraits: bool = False, need_voice: bool = False) -> Actor:
-    """Called by the pipeline: create missing photos / voice (and redo mock placeholders once real models are up)."""
-    img_mock = settings().mocked((settings().get("image", {}) or {}).get("service", "h3"))
+# backwards-compatible names used by the pipeline / tools
+def generate_portraits(aid: str, views: list[str] | None = None, *, reseed: bool = False) -> Actor:
+    """Look (auto-approved) + turnaround in one go — used by scripts and the mock tests."""
+    a = load(aid)
+    if reseed or not a.look.get("approved") or not all(v in {view_of(p) for p in a.portraits} for v in LOOK_VIEWS):
+        generate_look(aid, reseed=reseed, auto_approve=True)
+    return generate_turnaround(aid, [v for v in (views or TURN_VIEWS) if v in TURN_VIEWS])
+
+
+def ensure_ready(a: Actor, *, need_portraits: bool = False, need_voice: bool = False, lang: str | None = None) -> Actor:
+    """Called by the pipeline: create what a shot needs (and redo mock placeholders once real models are up).
+    An actor whose look was never approved gets the look auto-approved — logged in the actor's jobs."""
     if need_portraits:
-        stale = [p.view for p in a.portraits if p.source == "mock" and not img_mock]
-        have = {p.view for p in a.portraits}
-        missing = [v for v in REF_VIEWS if v not in have]
-        if stale or missing:
-            a = generate_portraits(a.id, sorted(set(stale + missing), key=DEFAULT_VIEWS.index))
-    if need_voice and a.voice.source != "uploaded":
-        f = adir(a.id) / a.voice.sample if a.voice.sample else None
-        if not f or not f.exists() or (a.voice.mock and not settings().mocked("voxcpm")):
-            a = generate_voice(a.id)
+        have = {view_of(p) for p in a.portraits if p.source != "mock" or _image_mock()}
+        if not a.look.get("approved") or not all(v in have for v in LOOK_VIEWS):
+            a = generate_look(a.id, auto_approve=True)
+        st = staleness(a)
+        have = {view_of(p) for p in a.portraits if p.view in VIEWS and (p.source != "mock" or _image_mock())}
+        missing = [v for v in REF_VIEWS if v not in have or v in st["views"]]
+        if missing:
+            a = generate_turnaround(a.id, [v for v in missing if v in TURN_VIEWS])
+    if need_voice and not (a.voice.source == "uploaded"):
+        ref = voice_ref(a, lang)
+        stale = a.voice.mock and not settings().mocked("voxcpm")
+        if not ref or stale:
+            a = generate_voice(a.id, lang=lang if lang and not voice_ref(a, lang) else None)
     return a
 
 
@@ -595,11 +941,12 @@ def resolve_list(refs: list[str] | None) -> list[str]:
 
 
 def summary(a: Actor, films: list[dict] | None = None) -> dict:
-    by_view = {p.view: p.file for p in a.portraits}
-    thumb = by_view.get(a.primary) or (a.portraits[0].file if a.portraits else None)
+    by_view = {view_of(p): p.file for p in a.portraits}
+    thumb = by_view.get(a.primary) or by_view.get("headshot") or (a.portraits[0].file if a.portraits else None)
     return {"id": a.id, "handle": a.handle, "name": a.name, "name_en": a.name_en, "age": a.age, "gender": a.gender,
             "occupation": a.occupation, "tags": a.tags, "thumb": thumb, "voice": bool(a.voice.sample),
-            "real_person": a.consent.real_person, "jobs": a.jobs,
+            "real_person": a.consent.real_person, "jobs": a.jobs, "intro": a.intro.get("file"),
+            "intro_poster": a.intro.get("poster"), "look_approved": bool(a.look.get("approved")),
             "films": len(films) if films is not None else None}
 
 

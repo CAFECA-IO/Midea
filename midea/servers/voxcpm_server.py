@@ -41,6 +41,39 @@ def _load() -> None:
     MODEL = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False, optimize=optimize)
 
 
+ECAPA = None
+
+
+class SimReq(BaseModel):
+    a: str
+    b: str
+
+
+@app.post("/similarity")
+def similarity(req: SimReq) -> dict:
+    """Speaker similarity (ECAPA-TDNN cosine, CPU) between two audio files on this machine."""
+    global ECAPA
+    import os
+    import torch
+    import torchaudio  # noqa: F401 — speechbrain backend
+    from speechbrain.inference.speaker import EncoderClassifier
+    with LOCK:
+        if ECAPA is None:
+            ECAPA = EncoderClassifier.from_hparams("speechbrain/spkrec-ecapa-voxceleb",
+                                                   savedir=os.environ.get("ECAPA_DIR", "pretrained_models/ecapa"),
+                                                   run_opts={"device": "cpu"})
+        embs = []
+        for f in (req.a, req.b):
+            wav, sr = sf.read(f, dtype="float32", always_2d=True)
+            x = torch.from_numpy(wav.mean(axis=1))
+            if sr != 16000:
+                import torchaudio.functional as AF
+                x = AF.resample(x, sr, 16000)
+            embs.append(ECAPA.encode_batch(x.unsqueeze(0)).squeeze())
+        score = torch.nn.functional.cosine_similarity(embs[0], embs[1], dim=0).item()
+    return {"score": round(float(score), 4)}
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": MODEL is not None}

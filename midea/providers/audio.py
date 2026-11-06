@@ -46,6 +46,17 @@ def tts(text: str, out: Path, *, voice: str | None = None, reference_wav: str | 
     return out
 
 
+def speaker_similarity(a: str, b: str) -> float:
+    """Cosine similarity of ECAPA speaker embeddings (same person ≳ 0.5). 1.0 in mock mode."""
+    if settings().mocked("voxcpm") or not a or not b:
+        return 1.0
+    cfg = _svc("voxcpm")
+    with scheduler().lease("voxcpm"):
+        r = httpx.post(f"{cfg['base_url']}/similarity", json={"a": str(a), "b": str(b)}, timeout=300)
+        r.raise_for_status()
+    return float(r.json()["score"])
+
+
 def _mock_voice(text: str, out: Path) -> Path:
     dur = estimate_speech_seconds(text)
     # syllable-like amplitude modulation so loudness/silence QA behaves like speech

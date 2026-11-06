@@ -125,9 +125,39 @@ image:
   steps: 8
   shift: 3
 
+image_edit:                      # Qwen-Image-Edit-2511（Apache-2.0）：三視圖、換穿商品、廣告分鏡
+  service: h3
+  model: Qwen-Image-Edit-2511
+  unet: qwen_image_edit_2511_int8_convrot.safetensors   # Ampere 用 INT8 convrot
+  text_encoder: qwen_2.5_vl_7b_fp8_scaled.safetensors
+  vae: qwen_image_vae.safetensors
+  lora: Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors
+  steps: 4
+  cfg: 1.0
+  shift: 3.1
+
+verify:                          # 定妝照自動驗收（RTMW 全身 133 點姿態，CPU）；門檻可依實測調整
+  mode: balanced
+  ankle_min: 0.5                 # 腳踝信心值下限（看不到腳時約 0.2–0.3）
+  feet_min: 0.45                 # 腳趾 / 腳跟平均信心值下限
+  bottom_max: 0.97               # 腳底位置（畫面高度比例）上限：鞋子下方要留白
+  bottom_target: 0.93            # 腳太貼底時，延伸攝影棚地面讓鞋底落在此高度
+  face_min: 0.6                  # 正面 / 大頭照的臉部點平均信心值下限
+  front_shoulder_min: 0.45       # 正面全身：肩寬 / 軀幹高
+  side_shoulder_max: 0.35        # 側面全身：肩寬 / 軀幹高上限（實測正面約 1.0、正側面約 0.27）
+  back_facing_min: 0.05          # 背面：左右肩、左右髖在畫面上須左右對調（背對鏡頭），對調幅度下限
+  three_quarter_yaw_min: 0.15
+  headshot_yaw_max: 0.2
+  jump_threshold: 30             # 說話影片：相隔 1 秒的畫面差異上限（說話/揮手約 4–22，H3 自插的溶接跳切約 35–50）
+
 actors:
-  refs_per_actor: 2              # 每位演員給 H3 Ref2VA 幾張參考照（正面大頭照 + 全身定裝）
-  max_per_shot: 4                # 單一鏡頭最多幾位演員（H3 參考圖上限 9 張）
+  refs_per_actor: 3              # 每位演員給 H3 Ref2VA 幾張參考照（正面大頭照、正面全身、側面全身）
+  max_per_shot: 3                # 單一鏡頭最多幾位演員（H3 參考圖上限 9 張）
+  view_attempts: 3               # 定妝照驗收不合格時最多生成幾次
+  intro_attempts: 3              # 說話影片驗收不合格時最多拍幾次
+  intro_cer_max: 0.15            # 台詞字錯率上限（Whisper；中文以讀音比對；漏掉自我介紹的名字約 18%）
+  intro_line_max_s: 6.5          # 自我介紹台詞上限秒數（太長時 H3 對嘴會在中段含糊重複）
+  voice_similarity_min: ${VOICE_SIM_MIN:-0.5}   # 與標準聲音的聲紋相似度下限（ECAPA cosine）
   lipsync: ${ACTORS_LIPSYNC:-true}   # 實驗：允許演員在畫面中親口說台詞（以 VoxCPM2 台詞音訊為 H3 <Audio 1> 參考）
 
 # ---- 開放/免費素材庫 ------------------------------------------------------

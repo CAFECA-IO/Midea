@@ -122,3 +122,34 @@ Strata 用 `strata-iq3_s-local.json` 啟動時，會把專家快取塞滿 GPU，
     - 當時 Strata 未執行，企劃、腳本、分鏡是手寫後直接寫入 checkpoint。
 - 提示詞**不放演員姓名**，只用 `<Picture i>` 指稱。實測放了英文名，H3 會把名字畫在店門玻璃上。
 - 親口說台詞（`lipsync`）的做法：把 VoxCPM2 生成的該句台詞當成 H3 的 `<Audio 1>` 參考。H3 生成的影片會帶對嘴與語音，這段語音直接當作該鏡的人聲。實測 Whisper 能正確辨識出原句。可用 `ACTORS_LIPSYNC=false` 關閉。
+
+## 演員升級：定妝確認、三視圖、說話影片（2026-11-06）
+
+- **權重**：`deploy_server.sh qedit` 安裝 Qwen-Image-Edit-2511，約 31GB，包含：
+  - `qwen_image_edit_2511_int8_convrot`（Ampere 用 INT8）
+  - `qwen_2.5_vl_7b_fp8_scaled`
+  - `qwen_image_vae`
+  - Lightning 4 步 LoRA
+  - 若 Xet 傳輸卡住，改用 `fetch_qedit.sh`，以 `curl -C -` 續傳。
+- **驗收模型**：`deploy_server.sh verify` 安裝以下兩個模型：
+  - RTMW 全身姿態（rtmlib＋onnxruntime，跑在 CPU，不需要系統 GL 函式庫；MediaPipe 在此機器缺 `libGLESv2`）
+  - ECAPA 聲紋模型（speechbrain，裝在 audio venv，路徑由 `.env` 的 `ECAPA_DIR` 指定）
+- **流程**：
+  1. 定妝確認：Z-Image 生成正面大頭照與正面全身照，等人工確認。
+  2. 三視圖：以確認的兩張照片為參考，用 Qwen-Image-Edit 展開四分之三側臉、側面全身、背面全身。
+  3. 自我介紹：Qwen 寫自我介紹 → VoxCPM2 用演員聲音念 → H3 Ref2VA（`<Audio 1>`）生成對嘴影片 → 驗收（Whisper 字錯率、ECAPA 聲紋相似度、跳切偵測）。
+- **驗收門檻**（`config.yaml` → `verify.*`、`actors.*`），以實測值校準：
+
+  | 項目 | 實測值 | 門檻 |
+  |---|---|---|
+  | 腳踝信心（看得到腳 / 看不到） | 0.9 / 0.2–0.3 | 0.5 |
+  | 肩寬／軀幹高（正面 / 正側面） | ≈1.0 / ≈0.27 | 側面 ≤ 0.35 |
+  | 背面判定：左右肩、左右髖在畫面上對調（正面 +0.4、背面 −0.4） | — | 須對調 |
+
+  - 背面照**不能**用臉部信心判斷，因為模型會在後腦勺「猜」出一張臉。
+- **腳太貼畫面下緣**：直接縮小畫面，用兩下角的背景色延伸攝影棚地面，不重新生成。不可用邊緣複製，會把鞋子拉成長條。
+- **說話影片的跳切**：H3 偶爾會在片中自己插入溶接轉場。ffmpeg 的 scene score 測不到，改比對相隔 1 秒的縮圖差異：說話、揮手約 4–22，溶接約 35–50，門檻設 30。片長上限 10 秒，因為片子越長越容易出現。
+- **實測耗時**：
+  - Z-Image 每張 3–6 秒。
+  - Qwen-Image-Edit 每張約 20–30 秒（4 步）。
+  - H3 說話影片 10 秒 704×864 每次約 6 分鐘。
