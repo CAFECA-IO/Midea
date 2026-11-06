@@ -65,11 +65,47 @@ def gpu_apps() -> list[dict]:
 
 
 def _descendants(pid: int) -> set[int]:
+    """`pid` plus every process it spawned: same process group, same session, or a child of one of
+    those (servers such as Strata start their engine in its own process group)."""
     try:
-        out = subprocess.run(["ps", "-e", "-o", "pid=,pgid="], capture_output=True, text=True).stdout
+        out = subprocess.run(["ps", "-e", "-o", "pid=,ppid=,pgid=,sid="], capture_output=True, text=True).stdout
     except Exception:  # noqa: BLE001
         return {pid}
-    return {int(a) for a, b in (l.split() for l in out.strip().splitlines() if len(l.split()) == 2) if int(b) == pid} | {pid}
+    rows = [tuple(int(x) for x in l.split()) for l in out.strip().splitlines() if len(l.split()) == 4]
+    found = {pid} | {r[0] for r in rows if r[2] == pid or r[3] == pid}
+    grew = True
+    while grew:
+        new = {r[0] for r in rows if r[1] in found} - found
+        found |= new
+        grew = bool(new)
+    return found
+
+
+def _kill_tree(root: int, grace: float = 30) -> None:
+    """SIGTERM the whole tree (lets servers shut their engines down cleanly), then SIGKILL leftovers."""
+    tree = _descendants(root)
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(root, signal.SIGTERM)
+    for p in tree:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.kill(p, signal.SIGTERM)
+    deadline = time.time() + grace
+    alive = set(tree)
+    while alive and time.time() < deadline:
+        for p in list(alive):
+            try:
+                os.kill(p, 0)
+            except OSError:
+                alive.discard(p)
+                continue
+            with contextlib.suppress(ChildProcessError, OSError):   # reap our own zombies
+                if os.waitpid(p, os.WNOHANG)[0] == p:
+                    alive.discard(p)
+        time.sleep(0.5)
+    for p in alive:
+        log.warning("pid %d ignored SIGTERM; killing", p)
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.kill(p, signal.SIGKILL)
 
 
 @dataclass
@@ -142,10 +178,11 @@ class Service:
         if str(self.cfg.get("external", False)).lower() in ("true", "1", "yes"):
             raise RuntimeError(f"{self.name}: external endpoint {self.cfg.get('health') or self.cfg.get('base_url')} "
                                f"is not responding — start that service (Midea does not manage it)")
-        cmd = self.cfg.get("start")
+        # per-host overrides (e.g. run a site-specific server such as Strata as a Midea-managed service)
+        cmd = os.environ.get(f"MIDEA_{self.name.upper()}_START") or self.cfg.get("start")
         if not cmd:
             raise RuntimeError(f"service {self.name} has no start command and is not reachable")
-        cwd = os.path.expanduser(self.cfg.get("cwd", str(settings().root)))
+        cwd = os.path.expanduser(os.environ.get(f"MIDEA_{self.name.upper()}_CWD") or self.cfg.get("cwd", str(settings().root)))
         logs = settings().root / ".logs"
         logs.mkdir(exist_ok=True)
         self.log_path = logs / f"{self.name}.log"
@@ -172,18 +209,7 @@ class Service:
         pid = self.adopted_pid                 # local copy: another thread may stop the same service concurrently
         if pid:
             log.info("stopping %s (adopted pid %d) to free %.1f GB", self.name, pid, self.vram)
-            for sig in (signal.SIGTERM, signal.SIGKILL):
-                with contextlib.suppress(ProcessLookupError, PermissionError):
-                    os.killpg(pid, sig)
-                for _ in range(30):
-                    try:
-                        os.kill(pid, 0)
-                        time.sleep(1)
-                    except OSError:
-                        break
-                else:
-                    continue
-                break
+            _kill_tree(pid)
             self.adopted_pid = None
             self.pid_file.unlink(missing_ok=True)
             return
@@ -195,13 +221,9 @@ class Service:
             self.proc = None
             return
         log.info("stopping %s to free %.1f GB", self.name, self.vram)
-        with contextlib.suppress(ProcessLookupError):
-            os.killpg(proc.pid, signal.SIGTERM)
-        try:
-            proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(proc.pid, signal.SIGKILL)
+        _kill_tree(proc.pid, grace=float(self.cfg.get("stop_timeout_s", 30)))
+        with contextlib.suppress(Exception):
+            proc.wait(timeout=5)
         self.proc = None
         self.pid_file.unlink(missing_ok=True)
 

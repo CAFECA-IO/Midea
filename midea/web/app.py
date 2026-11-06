@@ -40,6 +40,8 @@ def _janitor() -> None:
         time.sleep(60)
         try:
             scheduler().unload_idle()
+            from ..providers import asr
+            asr.unload_idle(float(settings().get("gpu.idle_unload_s", 600)))
         except Exception:  # noqa: BLE001
             pass
 

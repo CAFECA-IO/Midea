@@ -9,13 +9,28 @@ from ..log import get_logger
 
 log = get_logger("asr")
 _model = None
+_last_used = 0.0
+
+
+def unload_idle(ttl: float) -> bool:
+    """Free the in-process Whisper model (≈3.5 GB VRAM) once it has been idle for `ttl` seconds."""
+    global _model
+    import time
+    if _model is None or time.time() - _last_used < ttl:
+        return False
+    _model = None
+    import gc
+    gc.collect()
+    log.info("whisper model unloaded after %.0fs idle", ttl)
+    return True
 
 
 def transcribe(path: str | Path, language: str | None = None) -> dict:
     """Return {"text", "language", "segments":[{start,end,text,words:[{start,end,word}]}]}."""
     if settings().mocked("whisper"):
         return {"text": "", "language": language or "zh", "segments": []}
-    global _model
+    global _model, _last_used
+    import time
     with scheduler().lease("whisper"):
         if _model is None:
             from faster_whisper import WhisperModel
@@ -36,4 +51,5 @@ def transcribe(path: str | Path, language: str | None = None) -> dict:
         for s in segs:
             out.append({"start": s.start, "end": s.end, "text": s.text.strip(),
                         "words": [{"start": w.start, "end": w.end, "word": w.word} for w in (s.words or [])]})
+    _last_used = time.time()
     return {"text": " ".join(s["text"] for s in out), "language": info.language, "segments": out}
