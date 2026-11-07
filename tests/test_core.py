@@ -269,3 +269,29 @@ def test_board_basic_auth(monkeypatch):
     bad = {"Authorization": "Basic " + base64.b64encode(b"midea:nope").decode()}
     assert c.get("/api/pipelines", headers=bad).status_code == 401
     assert c.get("/api/pipelines", headers=good).status_code != 401
+
+
+def test_ad_board_check():
+    from midea.pipelines.ad import STYLES, board_check
+    copy = {"outline": [{"beat": "hook", "lines": [{"speaker": "narrator", "text": "Travel begins before arrival."}]},
+                        {"beat": "cta", "lines": [{"speaker": "narrator", "text": "Wander wide. Wear light."}]}],
+            "supers": [{"beat": "cta", "text": "Wander wide. Wear light."}]}
+    shots = [{"id": "s01", "beat": "hook", "duration": 9, "line": {"text": "Travel begins before arrival."}}]
+    issues = board_check(shots, copy, STYLES["fashion"], 60)
+    assert any("only 1 shots" in m for m in issues) and any("longer than 6" in m for m in issues)
+    assert any("beats cta" in m for m in issues) and any("not placed" in m and "Wander" in m for m in issues)
+    good = [{"id": f"s{i:02d}", "beat": "hook" if i < 8 else "cta", "duration": 3.5, "line": None, "super": ""} for i in range(16)]
+    good[0]["line"] = {"text": "Travel begins before arrival."}
+    good[-1].update(line={"text": "Wander wide. Wear light."}, super="Wander wide. Wear light.")
+    assert board_check(good, copy, STYLES["fashion"], 60) == []
+    assert board_check(shots, copy, STYLES["standard"], 60) != []      # lost lines / beats matter for every style
+
+
+def test_gate_decision_survives_restart(tmp_path):
+    from midea.project import Project
+    p = Project.create({"prompt": "x"}, "hybrid")
+    p.update(lambda d: d["gates"].__setitem__("storyboard", {"status": "awaiting", "at": 1.0}))
+    p.decide_gate("storyboard", False, "redo it", by="board")          # no runner is waiting
+    rec = p.gate("storyboard", {})                                     # the restarted runner reaches the gate
+    assert rec["status"] == "rejected" and rec["note"] == "redo it"
+    assert p.load()["gates"]["storyboard"]["consumed"] is True

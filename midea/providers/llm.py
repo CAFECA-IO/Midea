@@ -78,10 +78,14 @@ class LLM:
                     body.pop(k, None)
                 r = httpx.post(f"{self.base_url}/chat/completions", json=body, timeout=1800)
             r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"]
+        ch = r.json()["choices"][0]
+        self.last_finish = ch.get("finish_reason") or ""
+        if self.last_finish == "length":
+            log.warning("LLM reply hit max_tokens=%d (truncated)", max_tokens)
+        return ch["message"]["content"]
 
     def json(self, task: str, system: str, user: str, *, images: list | None = None,
-             context: dict | None = None, retries: int = 2) -> Any:
+             context: dict | None = None, retries: int = 2, max_tokens: int = 8192) -> Any:
         """Ask for strict JSON. In mock mode a deterministic local planner answers instead."""
         if settings().mocked("qwen"):
             return mock_llm.answer(task, user, context or {})
@@ -90,7 +94,12 @@ class LLM:
         last: Exception | None = None
         for attempt in range(retries + 1):
             text = self.chat(sys, user if attempt == 0 else f"{user}\n\n(Previous answer was not valid JSON: {last})",
-                             images=images, temperature=0.4 if attempt else None)
+                             images=images, temperature=0.4 if attempt else None, max_tokens=max_tokens)
+            if getattr(self, "last_finish", "") == "length":     # a cut-off reply "repairs" into valid but partial JSON
+                last = ValueError(f"the answer was cut off at {max_tokens} tokens — be more concise")
+                max_tokens = min(max_tokens * 2, 32768)
+                log.warning("%s: truncated answer, retrying with max_tokens=%d", task, max_tokens)
+                continue
             try:
                 return _extract_json(text)
             except Exception as e:  # noqa: BLE001

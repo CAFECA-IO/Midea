@@ -60,7 +60,7 @@ STYLES: dict[str, dict] = {
         "max_lines": 6, "max_words": 9,    # sparse narration
         "music": ["classical", "country"],
         "voice": "(a deep, low, calm mature male narrator, speaking slowly and softly, with long pauses)",
-        "shot_min": 1.4, "shot_max": 6.0,
+        "shot_min": 1.4, "shot_max": 6.0, "min_shots": 15,
         "product_min": 0.25,               # the product appears late on purpose
         "df": {"grade": "fashion_film", "subtitle_style": "clean", "ambience_db": -24, "music_db": -3,
                "voice_pitch": 0.94},           # narrator: asetrate one semitone lower and 6 % slower
@@ -465,10 +465,26 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
                        "cta": copy.get("cta"), "concept": {k: (self._concept() or {}).get(k) for k in ("name", "idea", "lighting", "keywords")},
                        "cast": self._cast_text(), "product": self._facts().get("name"),
                        "product_type": self._facts().get("product_type")}
-            raw = _mock_board(self.cast(), copy, self.length) if settings().mocked("qwen") else \
-                self.ask("ad_storyboard", self.BOARD.format(length=self.length, share=float(self.style.get("product_min", 0.35)))
-                         + ("\n" + self.style["board"] if self.style.get("board") else ""), payload, feedback)
-            board = {"shots": [self._clean_shot(s, i) for i, s in enumerate((raw or {}).get("shots", []))]}
+            t = self.p.stage_data("tryon") or {}
+            if t.get("views") and not t.get("skipped"):
+                lead = self.lead()
+                payload["wardrobe_rule"] = (f"@{lead.handle} WEARS the product ({self._facts().get('name')}) in every shot they "
+                                            f"appear in — no jacket or other top over it; describe it as 'wearing the product'.")
+            sys_ = self.BOARD.format(length=self.length, share=float(self.style.get("product_min", 0.35))) \
+                + ("\n" + self.style["board"] if self.style.get("board") else "")
+            fb = feedback
+            for attempt in range(2):                   # one automatic redo when the board breaks the style rules
+                raw = _mock_board(self.cast(), copy, self.length) if settings().mocked("qwen") else \
+                    self.ask("ad_storyboard", sys_, payload, fb, max_tokens=16384)
+                shots = (raw or {}).get("shots", [])
+                issues = board_check(shots, copy, self.style, self.length)
+                if not issues or attempt:
+                    break
+                log.info("storyboard redo: %s", "; ".join(issues))
+                fb = (feedback + "\n" if feedback else "") + "Fix these problems with the shot list: " + "; ".join(issues)
+            if issues:
+                self.p.decide("storyboard rules", "; ".join(issues))
+            board = {"shots": [self._clean_shot(s, i) for i, s in enumerate(shots)]}
             _fit_total(board["shots"], self.length, min_dur=self.style.get("shot_min", 2.0),
                        end_range=(3.0, 4.0) if self.style.get("endcard") == "minimal" else (4.0, 5.0))
             board["style"] = self.style_id
@@ -536,15 +552,24 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
         n_people = len(roles)
         people = (f"Exactly {n_people} {'person' if n_people == 1 else 'people'} in the frame, each appearing once. "
                   if n_people else "")
-        look = ("Luxury fashion film still, quiet and unhurried, low saturation, soft film grain" if self.style_id == "fashion"
-                else "Cinematic advertising film still")
+        if self.style_id == "fashion":
+            look = ("Luxury fashion film still, quiet and unhurried, low saturation, soft film grain" if n_people
+                    else "Luxury landscape and still-life film frame with NO people, no person, no model, no figure anywhere, "
+                         "low saturation, soft film grain")
+        else:
+            look = "Cinematic advertising film still"
+        if not roles:
+            body = re.sub(r"\b(no people|nobody)\b[^.,;]*[.,;]?", "", body, flags=re.I).strip()
         if self.style.get("dialogue") is False and n_people:
             people += "Mouths closed, nobody talks. "
         prompt = (f"{look}, {aspect} frame. {people}{body}. {s.get('shot_size', '')} shot, "
                   f"{s.get('angle', 'eye level')}, {s.get('lens', '35mm')} lens, {s.get('lighting') or concept.get('lighting', '')}, "
-                  f"{s.get('color', '')} colour grade. Keep every person exactly as in their reference image (face, hair, "
-                  f"clothes{', the garment they wear' if worn else ''}); keep the product's exact colour and details. "
-                  f"Photorealistic, natural skin, no text, no logo, no watermark.")
+                  f"{s.get('color', '')} colour grade. "
+                  + (f"Keep every person exactly as in their reference image (face, hair, clothes"
+                     f"{', the garment they wear' if worn else ''}); " if roles else "")
+                  + "keep the product's exact colour and details. Photorealistic, "
+                  + ("natural skin, no text, no logo, no watermark." if roles else
+                     "no text, no logo, no watermark. The frame contains no human being at all."))
         out = self.p.path("storyboard", f"{s['id']}_{aspect.replace(':', 'x')}.png")
         seed = (zlib.crc32(f"{self.p.id}{s['id']}".encode()) + 7919 * int(s.get("_seed_bump", 0))) % 2_000_000_000
         if not imgs:                                    # no people, no product: plain Z-Image still
@@ -946,6 +971,33 @@ def enforce_narration(copy: dict, style: dict) -> None:
         keep = set(map(id, lines[:mx - 1] + lines[-1:]))
         for b in copy.get("outline", []):
             b["lines"] = [ln for ln in (b.get("lines") or []) if id(ln) in keep]
+
+
+def board_check(shots: list[dict], copy: dict, style: dict, length: float) -> list[str]:
+    """Structural problems in a planned shot list (before timing is fitted)."""
+    out = []
+    body = [s for s in shots if s.get("kind") != "endcard"]
+    lo = style.get("min_shots") or 0
+    if lo and len(body) < lo:
+        out.append(f"only {len(body)} shots — this style needs {lo}–{lo + 5} shots of 1.5–6 s")
+    mx = style.get("shot_max")
+    long_ = [s.get("id", "?") for s in body if mx and float(s.get("duration") or 0) > mx + 0.01]
+    if long_:
+        out.append(f"shots longer than {mx:.0f} s: {', '.join(long_)}")
+    beats = {b.get("beat") for b in copy.get("outline", []) or []}
+    missing = [b for b in BEATS if b in beats and not any(s.get("beat") == b for s in shots)]
+    if missing:
+        out.append("no shots for the beats " + ", ".join(missing))
+    said = " ".join(str((s.get("line") or {}).get("text", "") if isinstance(s.get("line"), dict) else s.get("line") or "")
+                    for s in shots).lower()
+    lost = [ln["text"] for ln in _lines(copy) if ln.get("text") and ln["text"].lower().rstrip(".") not in said]
+    if lost:
+        out.append("these narration lines are not placed on any shot: " + " | ".join(lost))
+    want = [x.get("text") for x in copy.get("supers", []) or [] if x.get("text")]
+    shown = " ".join(str(s.get("super") or "") for s in shots)
+    if [w for w in want if w not in shown]:
+        out.append("these supers are not placed on any shot: " + " | ".join(w for w in want if w not in shown))
+    return out
 
 
 def _fit_total(shots: list[dict], length: float, min_dur: float = 2.0, end_range: tuple = (4.0, 5.0)) -> None:

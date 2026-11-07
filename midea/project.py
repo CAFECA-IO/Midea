@@ -114,6 +114,12 @@ class Project:
             self.update(lambda d: d["gates"].__setitem__(name, rec))
             self.emit("gate", {"gate": name, "status": "approved", "auto": True})
             return rec
+        cur = self.load()["gates"].get(name, {})
+        if cur.get("status") in ("approved", "rejected") and cur.get("consumed") is False:
+            # decided while no runner was waiting (e.g. the board restarted): use that decision once
+            self.update(lambda d: d["gates"][name].__setitem__("consumed", True))
+            self.set_status("running", name)
+            return {**cur, "consumed": True}
         ev = threading.Event()
         self._gate_events[name] = ev
         GATE_WAITERS[(self.id, name)] = ev
@@ -125,6 +131,7 @@ class Project:
             if rec.get("status") in ("approved", "rejected"):   # decided via another process (CLI)
                 break
         GATE_WAITERS.pop((self.id, name), None)
+        self.update(lambda d: d["gates"][name].__setitem__("consumed", True))
         rec = self.load()["gates"][name]
         self.set_status("running", name)
         return rec
@@ -132,7 +139,8 @@ class Project:
     def decide_gate(self, name: str, approved: bool, note: str = "", edits: dict | None = None, by: str = "user") -> None:
         def f(d: dict) -> None:
             g = d["gates"].setdefault(name, {})
-            g.update(status="approved" if approved else "rejected", note=note, by=by, decided_at=time.time())
+            g.update(status="approved" if approved else "rejected", note=note, by=by, decided_at=time.time(), consumed=False)
+            g.pop("edits", None)
             if edits:
                 g["edits"] = edits
         self.update(f)
