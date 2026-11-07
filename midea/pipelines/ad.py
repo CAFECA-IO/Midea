@@ -675,7 +675,10 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
                 continue
             st = tl["starts"][sc["id"]] + 0.2
             en = min(total, st + sc["duration_s"] - 0.4)
-            body = txt + (f"\\N{{\\fs{int(min(self.w, self.h) * 0.04)}}}{tr[txt]}" if tr.get(txt) else "")
+            shown = txt
+            if self.style_id == "fashion" and self.w < self.h * 1.2:   # wide-spaced couplets: one sentence per line
+                shown = re.sub(r"([.!?。！？])\s+(?=\S)", r"\1\\N", txt)
+            body = shown + (f"\\N{{\\fs{int(min(self.w, self.h) * 0.04)}}}{tr[txt]}" if tr.get(txt) else "")
             if self.style_id == "fashion":              # wide-spaced, light, centred titles that fade slowly
                 m = min(self.w, self.h)
                 tags = f"{{\\an5\\b0\\fs{int(m * 0.045)}\\fsp{int(m * 0.014)}\\bord1\\shad0\\fad(700,700)}}"
@@ -823,8 +826,9 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
             extra = [qa._r("product_time", "pass" if prod_s / total >= need else "warn",
                            f"商品出現 {prod_s:.0f}s / {total:.0f}s（{prod_s / total:.0%}，目標 ≥ {need:.0%}）")]
             ass = self.p.dir / o["ass"] if o.get("ass") else None
-            text = ass.read_text(encoding="utf-8") if ass and ass.exists() else ""
-            plan_supers = [s.get("super") for s in board.get("shots", []) if s.get("super")]
+            text = (ass.read_text(encoding="utf-8") if ass and ass.exists() else "").replace("\\N", " ")
+            plan_supers = [s.get("super") for s in board.get("shots", [])      # the end card draws its own text
+                           if s.get("super") and s.get("kind") != "endcard"]
             missing = [s for s in plan_supers if s not in text] if o.get("tag", "").startswith("60") else []
             extra.append(qa._r("supers", "fail" if missing else "pass",
                                f"缺少字卡：{'、'.join(missing)}" if missing else f"{len(plan_supers)} 張字卡與文案一致"))
