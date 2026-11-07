@@ -295,3 +295,20 @@ def test_gate_decision_survives_restart(tmp_path):
     rec = p.gate("storyboard", {})                                     # the restarted runner reaches the gate
     assert rec["status"] == "rejected" and rec["note"] == "redo it"
     assert p.load()["gates"]["storyboard"]["consumed"] is True
+
+
+def test_gpu_service_adopts_midea_started_and_forgets_dead_external(tmp_path, monkeypatch):
+    import os
+    from midea.gpu.manager import Service
+    sv = Service("h3x", {"health": "http://127.0.0.1:9/none", "vram_gb": 1})
+    monkeypatch.setattr(Service, "pid_file", property(lambda self: tmp_path / f"{self.name}.pid"))
+    up = {"v": True}
+    monkeypatch.setattr(Service, "healthy", lambda self, timeout=2.0: up["v"])
+    (tmp_path / "h3x.pid").write_text(str(os.getpid()))     # started by another Midea process
+    sv.start()
+    assert sv.adopted_pid == os.getpid() and not sv.external
+    sv2 = Service("other", {"health": "http://127.0.0.1:9/none", "vram_gb": 1})
+    sv2.start()                                              # no pid file: someone else's service
+    assert sv2.external and sv2.running
+    up["v"] = False                                          # it was stopped by hand
+    assert not sv2.running and not sv2.external

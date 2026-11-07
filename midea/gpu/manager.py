@@ -167,13 +167,23 @@ class Service:
                 return True
             except OSError:
                 self.adopted_pid = None
-        return self.external or (self.proc is not None and self.proc.poll() is None)
+        if self.external:
+            if self.healthy(0.5):
+                return True
+            self.external = False                   # it went away (stopped by hand): start our own next time
+            log.info("%s (external) is no longer reachable", self.name)
+        return self.proc is not None and self.proc.poll() is None
 
     def start(self) -> None:
         if self.in_process:
             return
         if self.healthy():
-            self.external = self.proc is None
+            # already up: started by another Midea process (pid file) → adopt it so we can stop it later;
+            # otherwise someone else runs it and we leave it alone
+            if self.proc is None and not self.adopted_pid and self.adopt():
+                log.info("adopted running %s (pid %d)", self.name, self.adopted_pid)
+            else:
+                self.external = self.proc is None and not self.adopted_pid
             return
         if str(self.cfg.get("external", False)).lower() in ("true", "1", "yes"):
             raise RuntimeError(f"{self.name}: external endpoint {self.cfg.get('health') or self.cfg.get('base_url')} "
