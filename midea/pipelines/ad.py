@@ -46,6 +46,67 @@ RISKY = re.compile(r"(cure|cures|treat|heal|prevent[s]? disease|anti[- ]?inflamm
                    r"100%|best in the world|#1|治療|治癒|根治|療效|消炎|抗發炎|醫療級|保證|第一名|最有效|永久)", re.I)
 ASPECTS = ["16:9", "9:16", "1:1"]
 
+# Ad styles. "standard" is the default commercial grammar; "fashion" is the luxury fashion-film grammar
+# (grand unrelated landscape, unhurried people, symbolic inserts, late product reveal, sparse low narration).
+MUSIC_GENRES = {
+    "classical": "slow classical — solo cello, strings or piano, 60–76 bpm, sparse, reverent",
+    "country": "slow acoustic country / folk — fingerpicked guitar, fiddle or pedal steel, 66–80 bpm, warm and unhurried",
+}
+STYLES: dict[str, dict] = {
+    "standard": {"label": "標準商業廣告"},
+    "fashion": {
+        "label": "時尚大片",
+        "dialogue": False,                 # nobody speaks on camera; only a narrator
+        "max_lines": 6, "max_words": 9,    # sparse narration
+        "music": ["classical", "country"],
+        "voice": "(a deep, low, calm mature male narrator, speaking slowly and softly, with long pauses)",
+        "shot_min": 1.4, "shot_max": 6.0,
+        "product_min": 0.25,               # the product appears late on purpose
+        "df": {"grade": "fashion_film", "subtitle_style": "clean", "ambience_db": -24, "music_db": -3,
+               "voice_pitch": 0.94},           # narrator: asetrate one semitone lower and 6 % slower
+        "endcard": "minimal",
+        "concepts": """STYLE — luxury fashion film. All three directions use this grammar but differ in place and symbol:
+- a grand, quiet landscape that has nothing to do with the product's everyday use (steppe, salt flat, dunes, sea cliffs,
+  misty lake, alpine meadow …) — the place lends the product its price;
+- people are unhurried: they stand, pause, turn back, look away; never selling, never smiling at the camera;
+- one symbolic animal or object that suggests heritage or freedom (no real brand marks or logos);
+- the product appears late, then is treated like jewellery (macro, backlight, shallow focus, an unexpected placement);
+- low-saturation palette where the costume colour is complementary to the landscape; overcast soft light or golden-hour backlight;
+- "music": {music} — instrumental, slow, sparse, no drums;
+- "slogan": a two-part parallel phrase (e.g. "Travel light. Arrive lighter.") — poetic, not a sales line.""",
+        "copy": """You are the copywriter of a luxury fashion film. Write the copy and beat outline for a {length:.0f}-second
+film in {lang}. NOBODY SPEAKS ON CAMERA: every line has speaker "narrator". The narration is SPARSE and SLOW: {max_lines}
+lines at most in the whole film, each ≤ {max_words} words (English) / 14 characters (Chinese), aphoristic, calm, never a
+sales pitch; leave whole beats silent (lines:[]) and at least 6 s between lines. RULES: every product claim must cite fact
+ids from `facts` (claims:[{{"text","fact_ids"}}]); never mention materials, sizes, performance, prices, stock,
+availability, sample/demo status or ordering unless a fact says so; no superlatives; obey banned_words.
+Beats and timing: hook 0–8 s (the place, the person tiny in it); problem 8–20 s (the person: unhurried, pausing, turning
+back — no problem is stated); reveal 20–27 s (the product's first close-up, around 40 % of the film); demo 27–44 s
+(ritual: an unusual pose, the product somewhere unexpected, short nature inserts); emotion 44–53 s (the person small on a
+vast horizon); cta 53–{length:.0f} s (product macro + slogan couplet, then the brand card).
+"supers": 2–3 short parallel couplets shown as wide-spaced titles (the last one is the slogan); "headline" = the slogan;
+"cta" = a quiet line such as the brand site name (no "buy now").
+Return JSON {{"headline","sub","cta","url_label","supers":[{{"beat","text"}}],
+ "outline":[{{"beat": one of {beats}, "start","end","purpose","lines":[{{"speaker":"narrator","text"}}]}}],
+ "claims":[{{"text","fact_ids":[..]}}], "social":[3 post captions], "hashtags":[..]}}""",
+        "board": """STYLE — luxury fashion film (follow strictly):
+- 15–20 shots; durations 1.5–6 s; most shots static or a slow push-in; long-lens tracking for any walking/riding.
+- Shot sizes are POLARISED: ECU/CU details or WS/EWS landscapes; at most 2 MS/MWS shots in the whole film.
+- At least 3 "insert" shots of 1.5–2 s with NO people and NO product: water, wind in grass, clouds, an animal's eye,
+  wind lifting a fabric edge — set "actors":[] and "product_visible": false.
+- People never hurry: standing still, a pause mid-walk, turning back over the shoulder, back to camera, faces often cropped
+  at the eyes; nobody talks (mouths closed), nobody smiles at the camera — except ONE sudden, unexplained look back.
+- ONE low-angle wide-lens (16–24mm) forced-perspective shot with the product huge in the foreground.
+- ONE surreal placement of the product (floating in the air, resting on the symbolic animal, on a rock in the water …).
+- The product's first clear close-up is at ~40 % of the run time; before that it is only seen far away or partially.
+- One EWS where the person is a tiny figure on the horizon (sky ≥ 2/3 of the frame).
+- The last shot before the end card is a product macro: very shallow depth of field, backlight, rack focus to the landscape.
+- Light: overcast soft light or golden-hour backlight; low saturation; costume colour complementary to the landscape.
+- Transitions are cuts (one slow fade at most). The end card is 3–4 s.
+- Lines (narration only, speaker "narrator") sit on wide or insert shots, never on a close-up of a face.""",
+    },
+}
+
 
 def _j(x: Any) -> str:
     return json.dumps(x, ensure_ascii=False)
@@ -61,6 +122,9 @@ class AdRunner(Runner):
         self.sub_langs = self.brief.get("subtitle_languages") or [self.lang]
         self.formats = [a for a in (self.brief.get("formats") or ASPECTS) if a in ASPECTS]
         self.length = float(self.brief.get("duration_s") or 60)
+        self.style_id = self.brief.get("style") if self.brief.get("style") in STYLES else "standard"
+        self.style = STYLES[self.style_id]
+        self.df.update(self.style.get("df") or {})
         chosen = self._concept()
         if chosen and chosen.get("palette_theme"):
             self.df["palette"] = chosen["palette_theme"]
@@ -109,6 +173,24 @@ class AdRunner(Runner):
             b["role"] = "lead" if i == 0 else "partner"
             out.append(b)
         return out
+
+    def _music_rule(self) -> str:
+        """Allowed music genres: brief.music_genre, else the style's list (A, B, C alternate between them)."""
+        want = self.brief.get("music_genre")
+        genres = [want] if want in MUSIC_GENRES else (self.style.get("music") or [])
+        if not genres:
+            return "genre, tempo, instruments"
+        if len(genres) == 1:
+            return MUSIC_GENRES[genres[0]]
+        return "; ".join(f"direction {'ABC'[i]}: {MUSIC_GENRES[genres[i % len(genres)]]}" for i in range(3))
+
+    def _music_prompt(self, concept: dict) -> str:
+        m = str(concept.get("music") or "").strip()
+        want = self.brief.get("music_genre")
+        genres = [want] if want in MUSIC_GENRES else (self.style.get("music") or [])
+        if genres and not any(g in m.lower() for g in genres):
+            m = MUSIC_GENRES[genres["ABC".find(str(concept.get("id", "A"))[:1]) % len(genres)]] + (f"; {m}" if m else "")
+        return (m or "uplifting instrumental") + (", instrumental, no vocals, no drums" if genres else "")
 
     # ------------------------------------------------------------------ 1. product
     def st_product(self, feedback: str) -> dict:
@@ -205,6 +287,8 @@ Return JSON {{"concepts":[{{"id":"A"|"B"|"C","name","idea" (2 sentences),"slogan
                    "brand_tone": self.brief.get("tone", ""), "audience": self.brief.get("audience", ""),
                    "banned_words": self.brief.get("banned_words") or []}
         sys_ = self.CONCEPTS.format(length=self.length, lang=self.lang)
+        if self.style.get("concepts"):
+            sys_ += "\n" + self.style["concepts"].format(music=self._music_rule())
         if settings().mocked("qwen"):
             raw = _mock_concepts(self.cast(), ft)
         else:
@@ -247,7 +331,7 @@ Return JSON {{"concepts":[{{"id":"A"|"B"|"C","name","idea" (2 sentences),"slogan
             raw = self.p.path("concepts", cid, f"pv_{i}_raw.mp4")
             out = self.p.path("concepts", cid, f"pv_{i}.mp4")
             who = [a for a in cast if f"@{a.handle}".lower() in str(shot.get("prompt", "")).lower()] or cast[:1]
-            body = str(shot.get("prompt", ""))
+            body = str(shot.get("prompt", "")) + (" Nobody speaks; mouths closed." if self.style.get("dialogue") is False else "")
             refs_by = {a.id: self._refs(a)[:2] for a in who}
             prompt, refs = cast_prompt(body, who, 2, refs_for=lambda a: refs_by[a.id])
             if prod and "product" in body.lower() and len(refs) < 9:
@@ -267,7 +351,7 @@ Return JSON {{"concepts":[{{"id":"A"|"B"|"C","name","idea" (2 sentences),"slogan
         vt.xfade_chain(clips, str(pic), [{"type": "dissolve", "duration": 0.4}], fps=24)
         total = ff.duration(pic)
         music = self.p.path("concepts", cid, "music.wav")
-        A.music(str(c.get("music") or "uplifting instrumental"), total + 1, music, instrumental=True)
+        A.music(self._music_prompt(c), total + 1, music, instrumental=True)
         amb = self.p.path("concepts", cid, "amb.wav")
         vt.extract_audio(str(pic), str(amb))
         from ..tools import audio as au
@@ -325,16 +409,21 @@ The outline must cover 0–{length:.0f} s in order; the last beat is "cta" (≥ 
                    "facts": self._creative_facts(), "cast": self._cast_text(), "product": ft.get("name"),
                    "brand": ft.get("brand"), "url": self.brief.get("product_url"),
                    "banned_words": self.brief.get("banned_words") or [], "audience": self.brief.get("audience", "")}
-        sys_ = self.COPY.format(length=self.length, lang=self.lang, beats=BEATS)
+        tpl = self.style.get("copy") or self.COPY
+        sys_ = tpl.format(length=self.length, lang=self.lang, beats=BEATS, max_lines=self.style.get("max_lines", 0),
+                          max_words=self.style.get("max_words", 0))
         fb = feedback
-        for attempt in range(2):                       # one automatic revision when the claims check fails
+        for attempt in range(2):                       # one automatic revision when the claims / style check fails
             raw = _mock_copy(self.cast(), ft, concept, self.length) if settings().mocked("qwen") else self.ask("ad_copy", sys_, payload, fb)
             copy = raw if isinstance(raw, dict) else {}
             flags = claims_check(copy, ft, self.brief.get("banned_words") or [], self.p.stage_data("product") or {})
-            if not [f for f in flags if f["level"] == "error"] or attempt:
+            style_issues = narration_check(copy, self.style)
+            if (not [f for f in flags if f["level"] == "error"] and not style_issues) or attempt:
                 break
-            fb = (feedback + "\n" if feedback else "") + "Fix these compliance problems: " + "; ".join(f["message"] for f in flags)
-        copy["flags"] = flags
+            fb = (feedback + "\n" if feedback else "") + "Fix these problems: " + "; ".join(
+                [f["message"] for f in flags if f["level"] == "error"] + style_issues)
+        enforce_narration(copy, self.style)
+        copy["flags"] = flags + [{"level": "warn", "message": m} for m in narration_check(copy, self.style)]
         copy["translations"] = self._translate_lines(copy)
         return copy
 
@@ -363,7 +452,7 @@ Each shot: {{"id":"s01".., "beat", "duration" (seconds, 2–7), "shot_size" (ECU
 "super": on-screen text or "", "prompt": English description of the frame for an image/video model — refer to cast ONLY
 by @handle and to the product as "the product"; describe action, setting, framing, light; ≤ 70 words}}.
 Rules: total duration exactly {length:.0f} s including a final pack-shot shot {{"kind":"endcard","beat":"cta","duration":4–5}};
-every line fits its shot (≈2.6 English words/s, 4 Chinese chars/s); the product is clearly visible for ≥ 35% of the run
+every line fits its shot (≈2.6 English words/s, 4 Chinese chars/s); the product is clearly visible for ≥ {share:.0%} of the run
 time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."""
 
     def st_storyboard(self, feedback: str) -> dict:
@@ -377,9 +466,12 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
                        "cast": self._cast_text(), "product": self._facts().get("name"),
                        "product_type": self._facts().get("product_type")}
             raw = _mock_board(self.cast(), copy, self.length) if settings().mocked("qwen") else \
-                self.ask("ad_storyboard", self.BOARD.format(length=self.length), payload, feedback)
+                self.ask("ad_storyboard", self.BOARD.format(length=self.length, share=float(self.style.get("product_min", 0.35)))
+                         + ("\n" + self.style["board"] if self.style.get("board") else ""), payload, feedback)
             board = {"shots": [self._clean_shot(s, i) for i, s in enumerate((raw or {}).get("shots", []))]}
-            _fit_total(board["shots"], self.length)
+            _fit_total(board["shots"], self.length, min_dur=self.style.get("shot_min", 2.0),
+                       end_range=(3.0, 4.0) if self.style.get("endcard") == "minimal" else (4.0, 5.0))
+            board["style"] = self.style_id
         for s in board["shots"]:
             if s.get("kind") == "endcard" or (s.get("keyframe") and (self.p.dir / s["keyframe"]).exists()):
                 continue
@@ -394,7 +486,8 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
         s = dict(s or {})
         s["id"] = f"s{i + 1:02d}"
         s["beat"] = s.get("beat") if s.get("beat") in BEATS else BEATS[min(i * len(BEATS) // 12, 5)]
-        s["duration"] = float(min(7, max(2, float(s.get("duration") or 4))))
+        s["duration"] = float(min(self.style.get("shot_max", 7), max(self.style.get("shot_min", 2), float(s.get("duration") or 4))))
+        s["insert"] = s.get("kind") == "insert"
         s["kind"] = "endcard" if s.get("kind") == "endcard" else "shot"
         ids = []
         for r in s.get("actors") or []:
@@ -406,6 +499,10 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
         if isinstance(ln, str):
             ln = {"speaker": "narrator", "text": ln}
         s["line"] = {"speaker": self._actor_id(ln.get("speaker", "")) or "", "text": str(ln.get("text", "")).strip()} if ln.get("text") else None
+        if s["line"] and self.style.get("dialogue") is False:
+            s["line"]["speaker"] = ""                   # narrator: nobody speaks on camera
+        if s["insert"]:
+            s["actors"], s["product_visible"] = [], False
         s["product_visible"] = bool(s.get("product_visible")) or s["kind"] == "endcard"
         return s
 
@@ -439,7 +536,11 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
         n_people = len(roles)
         people = (f"Exactly {n_people} {'person' if n_people == 1 else 'people'} in the frame, each appearing once. "
                   if n_people else "")
-        prompt = (f"Cinematic advertising film still, {aspect} frame. {people}{body}. {s.get('shot_size', '')} shot, "
+        look = ("Luxury fashion film still, quiet and unhurried, low saturation, soft film grain" if self.style_id == "fashion"
+                else "Cinematic advertising film still")
+        if self.style.get("dialogue") is False and n_people:
+            people += "Mouths closed, nobody talks. "
+        prompt = (f"{look}, {aspect} frame. {people}{body}. {s.get('shot_size', '')} shot, "
                   f"{s.get('angle', 'eye level')}, {s.get('lens', '35mm')} lens, {s.get('lighting') or concept.get('lighting', '')}, "
                   f"{s.get('color', '')} colour grade. Keep every person exactly as in their reference image (face, hair, "
                   f"clothes{', the garment they wear' if worn else ''}); keep the product's exact colour and details. "
@@ -473,15 +574,19 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
                     "product_img": prod.as_uri() if prod else "", "brand": ft.get("brand", ""),
                     "logo_img": (self.p.dir / "product" / logo).as_uri() if logo else "",
                     "headline": copy.get("headline") or concept.get("slogan", ""), "sub": copy.get("sub", ""),
-                    "cta": copy.get("cta", "Shop now"), "url": copy.get("url_label") or _host(self.brief.get("product_url", ""))}}
+                    "cta": copy.get("cta", "Shop now"), "url": copy.get("url_label") or _host(self.brief.get("product_url", "")),
+                    "minimal": self.style.get("endcard") == "minimal"}}
             else:
                 cam = f"{s.get('movement', 'static')} camera, {s.get('lens', '')} lens"
                 body = re.sub(r"@\w+", "the person", str(s.get("prompt", "")))
+                if self.style.get("dialogue") is False:
+                    body += (" Slow, unhurried movement. Nobody speaks: mouths stay closed; natural ambient sound only."
+                             if s.get("actors") else " Natural ambient sound only.")
                 sc["visual"] = {"kind": "h3_i2v", "prompt": body, "camera": cam,
                                 "params": {"first_frame": str(self.p.dir / s["keyframe"]) if s.get("keyframe") else ""}}
             scenes.append(sc)
-        plan = {"scenes": scenes, "music": {"prompt": concept.get("music") or "uplifting instrumental", "instrumental": True},
-                "voice": {}}
+        plan = {"scenes": scenes, "music": {"prompt": self._music_prompt(concept), "instrumental": True},
+                "voice": {"description": self.style["voice"]} if self.style.get("voice") else {}}
         from .. import cost as costmod
         plan["_estimate"] = est = costmod.estimate_plan(plan, self.brief)
         self.p.update(lambda d: d["cost"].__setitem__("estimated", est["total_cost"]))
@@ -546,7 +651,12 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
             st = tl["starts"][sc["id"]] + 0.2
             en = min(total, st + sc["duration_s"] - 0.4)
             body = txt + (f"\\N{{\\fs{int(min(self.w, self.h) * 0.04)}}}{tr[txt]}" if tr.get(txt) else "")
-            ev.append(f"Dialogue: 1,{_fmt(st, '.')[:-1]},{_fmt(en, '.')[:-1]},Super,,0,0,0,,{{\\fad(250,250)}}{body}")
+            if self.style_id == "fashion":              # wide-spaced, light, centred titles that fade slowly
+                m = min(self.w, self.h)
+                tags = f"{{\\an5\\b0\\fs{int(m * 0.045)}\\fsp{int(m * 0.014)}\\bord1\\shad0\\fad(700,700)}}"
+            else:
+                tags = "{\\fad(250,250)}"
+            ev.append(f"Dialogue: 1,{_fmt(st, '.')[:-1]},{_fmt(en, '.')[:-1]},Super,,0,0,0,,{tags}{body}")
         return ev
 
     # ------------------------------------------------------------------ 7. versions: 60/15 × 16:9 / 9:16 / 1:1
@@ -684,8 +794,9 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
         total = sum(s["duration"] for s in board.get("shots", [])) or 1
         prod_s = board.get("product_seconds", 0)
         for r, o in zip(rep["reports"], (self.p.stage_data("versions") or {}).get("outputs", [])):
-            extra = [qa._r("product_time", "pass" if prod_s / total >= 0.35 else "warn",
-                           f"商品出現 {prod_s:.0f}s / {total:.0f}s（{prod_s / total:.0%}，目標 ≥ 35%）")]
+            need = float(self.style.get("product_min", 0.35))
+            extra = [qa._r("product_time", "pass" if prod_s / total >= need else "warn",
+                           f"商品出現 {prod_s:.0f}s / {total:.0f}s（{prod_s / total:.0%}，目標 ≥ {need:.0%}）")]
             ass = self.p.dir / o["ass"] if o.get("ass") else None
             text = ass.read_text(encoding="utf-8") if ass and ass.exists() else ""
             plan_supers = [s.get("super") for s in board.get("shots", []) if s.get("super")]
@@ -798,7 +909,46 @@ def claims_check(copy: dict, ft: dict, banned: list[str], product: dict) -> list
     return flags
 
 
-def _fit_total(shots: list[dict], length: float) -> None:
+def _lines(copy: dict) -> list[dict]:
+    return [ln for b in copy.get("outline", []) or [] for ln in (b.get("lines") or []) if isinstance(ln, dict)]
+
+
+def _words(text: str) -> int:
+    t = str(text or "")
+    return len(re.sub(r"\s|[，。、,.!?！？]", "", t)) // 2 if re.search(r"[\u4e00-\u9fff]", t) else len(t.split())
+
+
+def narration_check(copy: dict, style: dict) -> list[str]:
+    """Style rules for the spoken copy: no on-camera dialogue, few and short narrator lines."""
+    out = []
+    if style.get("dialogue") is False:
+        talk = [ln for ln in _lines(copy) if str(ln.get("speaker", "narrator")).lower() not in ("narrator", "", "vo", "voice-over")]
+        if talk:
+            out.append(f"{len(talk)} lines are spoken by cast members — nobody speaks on camera, use the narrator only")
+    n, mx = len(_lines(copy)), style.get("max_lines")
+    if mx and n > mx:
+        out.append(f"{n} narration lines — at most {mx}")
+    mw = style.get("max_words")
+    long_ = [ln["text"] for ln in _lines(copy) if mw and _words(ln.get("text", "")) > mw]
+    if long_:
+        out.append(f"lines longer than {mw} words: " + " | ".join(long_[:3]))
+    return out
+
+
+def enforce_narration(copy: dict, style: dict) -> None:
+    """Last resort after the revision: narrator only, and drop the surplus lines (keep the first and the last)."""
+    if style.get("dialogue") is False:
+        for ln in _lines(copy):
+            ln["speaker"] = "narrator"
+    mx = style.get("max_lines")
+    lines = _lines(copy)
+    if mx and len(lines) > mx:
+        keep = set(map(id, lines[:mx - 1] + lines[-1:]))
+        for b in copy.get("outline", []):
+            b["lines"] = [ln for ln in (b.get("lines") or []) if id(ln) in keep]
+
+
+def _fit_total(shots: list[dict], length: float, min_dur: float = 2.0, end_range: tuple = (4.0, 5.0)) -> None:
     """Scale shot lengths so they add up to `length` exactly (end card kept at 4–5 s)."""
     if not shots:
         return
@@ -806,12 +956,12 @@ def _fit_total(shots: list[dict], length: float) -> None:
         shots.append({"id": f"s{len(shots) + 1:02d}", "beat": "cta", "duration": 4.5, "kind": "endcard", "actors": [],
                       "product_visible": True, "line": None, "super": "", "prompt": ""})
     end = shots[-1]
-    end["duration"] = min(5.0, max(4.0, end["duration"]))
+    end["duration"] = min(end_range[1], max(end_range[0], end["duration"]))
     body = shots[:-1]
     want = length - end["duration"]
     have = sum(s["duration"] for s in body) or 1
     for s in body:
-        s["duration"] = round(max(2.0, s["duration"] * want / have), 2)
+        s["duration"] = round(max(min_dur, s["duration"] * want / have), 2)
     end["duration"] = round(length - sum(s["duration"] for s in body), 2)
 
 

@@ -238,3 +238,19 @@ def test_ad_timing_helpers():
     assert shots[-1]["kind"] == "endcard" and abs(sum(s["duration"] for s in shots) - 60) < 0.01
     parts = _split_like("輕鬆打理，適合旅行與城市日常。", ["Easy care,", "for travel and city days."])
     assert len(parts) == 2 and "".join(parts).replace("，", "") .startswith("輕鬆打理")
+
+
+def test_ad_fashion_style_rules():
+    from midea.pipelines.ad import STYLES, _fit_total, enforce_narration, narration_check
+    st = STYLES["fashion"]
+    copy = {"outline": [{"beat": "hook", "lines": [{"speaker": "@chengen", "text": "Hello there, this is a much too long spoken line"}]},
+                        {"beat": "demo", "lines": [{"speaker": "narrator", "text": f"Line {i}."} for i in range(7)]}]}
+    issues = narration_check(copy, st)
+    assert any("narrator only" in m for m in issues) and any("at most 6" in m for m in issues) and any("longer than" in m for m in issues)
+    enforce_narration(copy, st)
+    lines = [ln for b in copy["outline"] for ln in b["lines"]]
+    assert len(lines) == 6 and all(ln["speaker"] == "narrator" for ln in lines) and lines[-1]["text"] == "Line 6."
+    assert narration_check({"outline": [{"lines": [{"speaker": "@a", "text": "hi"}]}]}, STYLES["standard"]) == []
+    shots = [{"id": f"s{i}", "duration": 3, "kind": "shot"} for i in range(18)] + [{"id": "e", "duration": 6, "kind": "endcard"}]
+    _fit_total(shots, 60, min_dur=1.4, end_range=(3.0, 4.0))
+    assert abs(sum(s["duration"] for s in shots) - 60) < 0.02 and shots[-1]["duration"] <= 4.05

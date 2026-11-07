@@ -61,6 +61,10 @@ def video_stream(path: str | Path) -> dict | None:
     return next((s for s in probe(path).get("streams", []) if s.get("codec_type") == "video"), None)
 
 
+def audio_stream(path: str | Path) -> dict | None:
+    return next((s for s in probe(path).get("streams", []) if s.get("codec_type") == "audio"), None)
+
+
 def esc_filter_path(p: str | Path) -> str:
     """Escape a path for use inside an ffmpeg filter argument (subtitles=, movie=...)."""
     s = str(Path(p).resolve())

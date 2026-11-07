@@ -445,6 +445,13 @@ class Runner:
                 A.tts(sc["narration"], f, voice=v_desc, reference_wav=v_ref)
                 marker.write_text(json.dumps({"mock": mock_now, "text": sc["narration"], "speaker": who, "ref": v_ref},
                                              ensure_ascii=False))
+            pitch = float(self.df.get("voice_pitch") or 0)
+            if pitch and not actor:                      # narrator colour: asetrate lowers the pitch and slows it
+                g = f.with_name("voice_low.wav")
+                if not g.exists() or g.stat().st_mtime < f.stat().st_mtime:
+                    sr = int((ff.audio_stream(f) or {}).get("sample_rate") or 48000)
+                    ff.run(["-i", f, "-af", f"asetrate={int(sr * pitch)},aresample={sr}", g])
+                f = g
             d = ff.duration(f)
             room = sc["duration_s"] - 0.35
             if self.df.get("lock_timing") and d > room > 0:      # keep the reference's beat timing: speed up ≤1.3×
@@ -729,12 +736,12 @@ class Runner:
         amb = self.p.path("audio", self._t("ambience.wav"))
         vt.extract_audio(str(picture), str(amb))
         fx = self.p.path("audio", self._t("fx_stem.wav"))
-        au.place([{"path": str(amb), "at": 0, "gain_db": -16}] + ms.get("sfx", []), str(fx), total)
+        au.place([{"path": str(amb), "at": 0, "gain_db": float(self.df.get("ambience_db", -16))}] + ms.get("sfx", []), str(fx), total)
         music = self.p.dir / ms["music"]["file"] if ms.get("music") else None
         mix = self.p.path("audio", self._t("mix.wav"))
         voice = self.p.dir / ed["voice_stem"]
         if music:
-            au.duck_mix(str(voice), str(music), str(mix), sfx=str(fx), music_db=-8, total=total)
+            au.duck_mix(str(voice), str(music), str(mix), sfx=str(fx), music_db=float(self.df.get("music_db", -8)), total=total)
         else:
             au.place([{"path": str(voice), "at": 0}, {"path": str(fx), "at": 0}], str(mix), total)
         return self._finish(picture, mix, ed["spans"], total, asr_src=voice)

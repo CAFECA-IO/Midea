@@ -4,6 +4,22 @@
 // Landscape: product left, copy right. Portrait / square: product on top, copy below.
 P.no_ambient = true;
 const svg = stage();
+if (P.minimal) {               // fashion-film card: wordmark, slogan and site only, wide letter spacing, slow fades
+  const K2 = W / H < .7 ? 1.25 : 1;
+  const wm = text(svg, String(P.brand || "").toUpperCase(), W / 2, H * .45, Math.min(64 * K2, W * .8 / Math.max(1, [...String(P.brand || "")].length) / U / 1.6),
+                  { "font-weight": 300, "letter-spacing": 18 * U });
+  const line = el("rect", { x: W / 2 - 40 * U, y: H * .45 + 50 * U, width: 80 * U, height: 1.5 * U, fill: C.muted }, svg);
+  const sl = text(svg, P.headline || "", W / 2, H * .45 + 100 * U, 26 * K2, { fill: C.muted, "font-weight": 300, "letter-spacing": 6 * U });
+  const ur = text(svg, P.url || "", W / 2, H * .88, 18 * K2, { fill: C.muted, "font-weight": 300, "letter-spacing": 4 * U });
+  window.render = (t, total) => {
+    const o = outro(t, total, .6);
+    wm.setAttribute("opacity", ease.outCubic(prog(t, .2, 1.2)) * o);
+    line.setAttribute("opacity", ease.outCubic(prog(t, .9, .8)) * o);
+    sl.setAttribute("opacity", ease.outCubic(prog(t, 1.1, 1.0)) * o);
+    ur.setAttribute("opacity", ease.outCubic(prog(t, 1.6, 1.0)) * o);
+  };
+  ready();
+} else {
 const land = W / H > 1.2;
 const pw = land ? W * .42 : W * .78, ph = land ? H * .72 : H * (W / H < .7 ? .42 : .46);
 const px = land ? W * .06 : (W - pw) / 2, py = land ? (H - ph) / 2 : H * .08;
@@ -45,4 +61,5 @@ window.render = (t, total) => {
   if (logo) logo.setAttribute("opacity", ease.outCubic(prog(t, .4, .6)) * o);
 };
 ready();
+}
 </script></body></html>

@@ -636,6 +636,8 @@ async function goAds() {
     <div><label>長度</label><select id="ad-len" disabled><option>60 秒（另含 15 秒剪輯版）</option></select></div>
     <div><label>台詞語言</label><select id="ad-lang"><option value="en">English</option><option value="zh-TW">繁中</option><option value="zh-CN">简中</option><option value="ja">日本語</option></select></div>
     <div><label>字幕</label><select id="ad-subs"><option value="en,zh-TW">英文＋繁中（雙語）</option><option value="zh-TW">繁中</option><option value="en">English</option></select></div>
+    <div><label>風格</label><select id="ad-style"><option value="standard">標準商業廣告（對白＋賣點示範）</option><option value="fashion">時尚大片（無對白、少量低沉旁白、壯闊場景、商品晚出場）</option></select></div>
+    <div><label>配樂</label><select id="ad-music"><option value="">依風格決定（時尚大片：古典／鄉村）</option><option value="classical">古典</option><option value="country">鄉村</option></select></div>
     <div><label>品牌語氣（選填）</label><input id="ad-tone" placeholder="例：溫暖、俐落、不浮誇"></div>
     <div><label>目標受眾（選填）</label><input id="ad-aud" placeholder="例：常出差的 25–40 歲上班族"></div>
     <div><label>禁用詞（逗號分隔，選填）</label><input id="ad-ban" placeholder="例：最便宜, 第一"></div>
@@ -651,7 +653,8 @@ async function createAd() {
   const body = { lead: $("#ad-lead").value, partner: $("#ad-partner").value || null, product_url: url, language: $("#ad-lang").value,
     subtitle_languages: $("#ad-subs").value.split(","), tone: $("#ad-tone").value, audience: $("#ad-aud").value,
     banned_words: $("#ad-ban").value.split(/[,，、]/).map(x => x.trim()).filter(Boolean),
-    formats: [...document.querySelectorAll(".ad-fmt:checked")].map(x => x.value), cutdown_15: $("#ad-15").checked };
+    formats: [...document.querySelectorAll(".ad-fmt:checked")].map(x => x.value), cutdown_15: $("#ad-15").checked,
+    style: $("#ad-style").value, music_genre: $("#ad-music").value };
   if (body.partner === body.lead) body.partner = null;
   $("#ad-go").disabled = true;
   try { const r = await api("/api/ads", { method: "POST", body: JSON.stringify(body) }); TAB = "ad"; await refreshList(); open(r.id); }

@@ -421,6 +421,8 @@ class NewAd(BaseModel):
     banned_words: list[str] = []
     formats: list[str] = ["16:9", "9:16", "1:1"]
     cutdown_15: bool = True
+    style: str = "standard"                    # standard | fashion (luxury fashion film)
+    music_genre: str = ""                      # "" = the style's choice | classical | country
     auto_approve: bool = False
 
 
@@ -434,7 +436,8 @@ def create_ad(req: NewAd) -> dict:
              "product_url": req.product_url, "actors": cast, "duration_s": 60.0, "language": req.language,
              "subtitle_languages": req.subtitle_languages, "tone": req.tone, "audience": req.audience,
              "banned_words": req.banned_words, "formats": [f for f in req.formats if f in ("16:9", "9:16", "1:1")] or ["16:9"],
-             "cutdown_15": req.cutdown_15, "aspect": "16:9", "aspect_locked": True, "music": True, "subtitles": True}
+             "cutdown_15": req.cutdown_15, "style": req.style if req.style in ("standard", "fashion") else "standard",
+             "music_genre": req.music_genre if req.music_genre in ("classical", "country") else "", "aspect": "16:9", "aspect_locked": True, "music": True, "subtitles": True}
     p = Project.create(brief, "ad-60")
     _runs[p.id] = run_async(p, auto_approve=req.auto_approve)
     return {"id": p.id, "pipeline": "ad-60"}

@@ -200,6 +200,9 @@ GRADES = {
     "noir": "hue=s=0,eq=contrast=1.35:brightness=-0.03,vignette=PI/4",
     "warm": "colortemperature=temperature=4800,eq=saturation=1.08",
     "cool": "colortemperature=temperature=7600,eq=saturation=0.98",
+    # luxury fashion film: muted colour, lifted blacks, a little teal in the shadows, fine grain, soft vignette
+    "fashion_film": "eq=contrast=1.04:saturation=0.8:gamma=1.02,colorbalance=bs=.04:gs=.015:rh=.03:bh=-.02,"
+                    "curves=all='0/0.03 0.5/0.5 1/0.97',noise=alls=5:allf=t+u,vignette=PI/5",
 }
 
 
