@@ -21,7 +21,7 @@ Midea 部署在 `borg@211.22.118.147:/workspace/midea`。所有東西（程式�
 
 | 服務 | Port | 備註 |
 |---|---|---|
-| 看板 | 7788 | 只綁 127.0.0.1，從外面要走 SSH tunnel |
+| 看板 | 10030 | 對外開放（0.0.0.0），需登入：帳密在 `app/.env` 的 `MIDEA_BOARD_USER`／`MIDEA_BOARD_PASSWORD` |
 | Qwen3.8-Flash-Next | **8080（Strata，外部）** | 由 root 的 Strata 提供，Midea 只連線，不負責啟停 |
 | ComfyUI + MiniMax H3 | 8781 | 獨佔 GPU |
 | VoxCPM2 | 8782 | |
@@ -31,9 +31,16 @@ Midea 部署在 `borg@211.22.118.147:/workspace/midea`。所有東西（程式�
 
 ## 開看板
 
+瀏覽器直接開 http://211.22.118.147:10030 ，用 `app/.env` 裡的帳密登入（HTTP Basic）。
+
+- `run_board.sh` 以 `--host 0.0.0.0 --port 10030` 啟動。
+- 綁在 localhost 以外時，若沒設 `MIDEA_BOARD_PASSWORD`，`midea serve` 會拒絕啟動。
+- `/healthz` 不需登入，可用來做健康檢查。
+- 伺服器的 ufw 未啟用；能否從外部連入，取決於機房的網路防火牆（2026-11-07 實測可連）。
+- 想改回只在本機使用：把 `run_board.sh` 改回 `--host 127.0.0.1`，再用 SSH tunnel 連線：
+
 ```bash
-ssh -i ~/Documents/workspace/faith/BORG.pem -N -L 7788:127.0.0.1:7788 borg@211.22.118.147
-# 然後用瀏覽器開 http://127.0.0.1:7788
+ssh -i ~/Documents/workspace/faith/BORG.pem -N -L 10030:127.0.0.1:10030 borg@211.22.118.147
 ```
 
 ## 常用指令（在伺服器上）

@@ -254,3 +254,18 @@ def test_ad_fashion_style_rules():
     shots = [{"id": f"s{i}", "duration": 3, "kind": "shot"} for i in range(18)] + [{"id": "e", "duration": 6, "kind": "endcard"}]
     _fit_total(shots, 60, min_dur=1.4, end_range=(3.0, 4.0))
     assert abs(sum(s["duration"] for s in shots) - 60) < 0.02 and shots[-1]["duration"] <= 4.05
+
+
+def test_board_basic_auth(monkeypatch):
+    import base64
+    from fastapi.testclient import TestClient
+    from midea.web import app as web
+    monkeypatch.setattr(web, "_AUTH_PASS", "s3cret")
+    c = TestClient(web.app)
+    assert c.get("/healthz").status_code == 200
+    r = c.get("/api/pipelines")
+    assert r.status_code == 401 and "Basic" in r.headers["www-authenticate"]
+    good = {"Authorization": "Basic " + base64.b64encode(b"midea:s3cret").decode()}
+    bad = {"Authorization": "Basic " + base64.b64encode(b"midea:nope").decode()}
+    assert c.get("/api/pipelines", headers=bad).status_code == 401
+    assert c.get("/api/pipelines", headers=good).status_code != 401

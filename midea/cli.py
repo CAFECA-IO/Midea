@@ -49,8 +49,12 @@ def cmd_make(a: argparse.Namespace) -> None:
 def cmd_serve(a: argparse.Namespace) -> None:
     import uvicorn
     from .config import settings
+    import os
     from .web.app import app
-    uvicorn.run(app, host=a.host or settings().get("server.host", "127.0.0.1"),
+    host = a.host or settings().get("server.host", "127.0.0.1")
+    if host not in ("127.0.0.1", "localhost", "::1") and not os.environ.get("MIDEA_BOARD_PASSWORD"):
+        raise SystemExit(f"refusing to serve on {host} without a login: set MIDEA_BOARD_PASSWORD (and MIDEA_BOARD_USER) in app/.env")
+    uvicorn.run(app, host=host,
                 port=a.port or int(settings().get("server.port", 7788)), log_level="warning")
 
 

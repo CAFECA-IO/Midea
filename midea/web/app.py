@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hmac
 import json
+import os
 import queue
 import shutil
 import threading
@@ -10,8 +13,8 @@ import time
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from .. import actors as AC
@@ -22,6 +25,32 @@ from ..project import Project, list_projects, on_event
 from ..tools import catalog
 
 app = FastAPI(title="Midea Studio")
+
+# Optional HTTP Basic auth for the whole board (required whenever it listens beyond localhost):
+# MIDEA_BOARD_USER / MIDEA_BOARD_PASSWORD in app/.env. The browser remembers the login for API, SSE and media calls.
+_AUTH_USER = os.environ.get("MIDEA_BOARD_USER", "midea")
+_AUTH_PASS = os.environ.get("MIDEA_BOARD_PASSWORD", "")
+
+
+@app.middleware("http")
+async def _basic_auth(request: Request, call_next):
+    if _AUTH_PASS and request.url.path != "/healthz":
+        ok = False
+        h = request.headers.get("authorization", "")
+        if h.lower().startswith("basic "):
+            try:
+                u, _, pw = base64.b64decode(h[6:]).decode("utf-8").partition(":")
+                ok = hmac.compare_digest(u, _AUTH_USER) and hmac.compare_digest(pw, _AUTH_PASS)
+            except Exception:  # noqa: BLE001
+                ok = False
+        if not ok:
+            return Response("login required", status_code=401, headers={"WWW-Authenticate": 'Basic realm="Midea Studio"'})
+    return await call_next(request)
+
+
+@app.get("/healthz")
+def healthz() -> dict:
+    return {"ok": True}
 STATIC = Path(__file__).parent / "static"
 _subs: dict[str, list[queue.Queue]] = {}
 _runs: dict[str, threading.Thread] = {}
