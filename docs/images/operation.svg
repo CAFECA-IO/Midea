@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="Midea 操作說明" font-family="'PingFang TC','Noto Sans CJK TC','Microsoft JhengHei','Noto Sans TC',system-ui,sans-serif">
+<title>Midea 操作說明</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9ba6b8"/></marker><marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f2b84b"/></marker></defs>
+<rect width="1200" height="340" rx="16" fill="#1d2330"/>
+<text x="40" y="52" font-size="26" fill="#e9edf4" font-weight="700" text-anchor="start">操作說明</text>
+<text x="40" y="78" font-size="14" fill="#9ba6b8" font-weight="400" text-anchor="start">從開啟看板到下載成品的五個步驟</text>
+<rect x="40.0" y="104" width="204.8" height="200" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<circle cx="70.0" cy="138" r="16" fill="#f2b84b"/>
+<text x="70.0" y="143" font-size="15" fill="#1d2330" font-weight="800" text-anchor="middle">1</text>
+<text x="96.0" y="144" font-size="17" fill="#e9edf4" font-weight="700" text-anchor="start">登入看板</text>
+<text x="58.0" y="186" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">瀏覽器開 :10030</text>
+<text x="58.0" y="212" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">輸入 .env 中的帳密</text>
+<text x="58.0" y="238" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">左上切換三個分頁</text>
+<line x1="247.8" y1="204" x2="265.8" y2="204" stroke="#f2b84b" stroke-width="1.6" marker-end="url(#am)"/>
+<rect x="268.8" y="104" width="204.8" height="200" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<circle cx="298.8" cy="138" r="16" fill="#f2b84b"/>
+<text x="298.8" y="143" font-size="15" fill="#1d2330" font-weight="800" text-anchor="middle">2</text>
+<text x="324.8" y="144" font-size="17" fill="#e9edf4" font-weight="700" text-anchor="start">建立演員</text>
+<text x="286.8" y="186" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">演員陣容 → 新增演員</text>
+<text x="286.8" y="212" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">一句話描述，AI 補完</text>
+<text x="286.8" y="238" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">確認定妝照（選用）</text>
+<line x1="476.6" y1="204" x2="494.6" y2="204" stroke="#f2b84b" stroke-width="1.6" marker-end="url(#am)"/>
+<rect x="497.6" y="104" width="204.8" height="200" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<circle cx="527.6" cy="138" r="16" fill="#f2b84b"/>
+<text x="527.6" y="143" font-size="15" fill="#1d2330" font-weight="800" text-anchor="middle">3</text>
+<text x="553.6" y="144" font-size="17" fill="#e9edf4" font-weight="700" text-anchor="start">開始製作</text>
+<text x="515.6" y="186" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">影片：寫描述、選管線</text>
+<text x="515.6" y="212" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">廣告：主演＋商品網址</text>
+<text x="515.6" y="238" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">選風格、配樂、規格</text>
+<line x1="705.4000000000001" y1="204" x2="723.4000000000001" y2="204" stroke="#f2b84b" stroke-width="1.6" marker-end="url(#am)"/>
+<rect x="726.4000000000001" y="104" width="204.8" height="200" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<circle cx="756.4000000000001" cy="138" r="16" fill="#f2b84b"/>
+<text x="756.4000000000001" y="143" font-size="15" fill="#1d2330" font-weight="800" text-anchor="middle">4</text>
+<text x="782.4000000000001" y="144" font-size="17" fill="#e9edf4" font-weight="700" text-anchor="start">審核關卡</text>
+<text x="744.4000000000001" y="186" font-size="13.5" fill="#f2b84b" font-weight="400" text-anchor="start">◆ 出現時檢視內容</text>
+<text x="744.4000000000001" y="212" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">核准／退回寫意見</text>
+<text x="744.4000000000001" y="238" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">逐鏡勾選重畫或重生</text>
+<line x1="934.2" y1="204" x2="952.2" y2="204" stroke="#f2b84b" stroke-width="1.6" marker-end="url(#am)"/>
+<rect x="955.2" y="104" width="204.8" height="200" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<circle cx="985.2" cy="138" r="16" fill="#f2b84b"/>
+<text x="985.2" y="143" font-size="15" fill="#1d2330" font-weight="800" text-anchor="middle">5</text>
+<text x="1011.2" y="144" font-size="17" fill="#e9edf4" font-weight="700" text-anchor="start">下載成品</text>
+<text x="973.2" y="186" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">最後核准「發佈」</text>
+<text x="973.2" y="212" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">final/ 影片、字幕</text>
+<text x="973.2" y="238" font-size="13.5" fill="#9ba6b8" font-weight="400" text-anchor="start">分鏡 PDF、文案、README</text>
+</svg>

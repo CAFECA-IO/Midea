@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-label="Midea 工作流程" font-family="'PingFang TC','Noto Sans CJK TC','Microsoft JhengHei','Noto Sans TC',system-ui,sans-serif">
+<title>Midea 工作流程</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9ba6b8"/></marker><marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f2b84b"/></marker></defs>
+<rect width="1200" height="640" rx="16" fill="#1d2330"/>
+<text x="40" y="52" font-size="26" fill="#e9edf4" font-weight="700" text-anchor="start">工作流程</text>
+<text x="40" y="78" font-size="14" fill="#9ba6b8" font-weight="400" text-anchor="start">三條主要流程；◆ 為審核關卡（暫停等人決定），其他步驟自動執行</text>
+<rect x="40" y="100" width="1120" height="150" rx="14" fill="#222a39" stroke="#4a556b" stroke-width="1.2"/>
+<text x="60" y="128" font-size="17" fill="#e9edf4" font-weight="600" text-anchor="start">影片製作</text>
+<text x="148" y="128" font-size="13" fill="#9ba6b8" font-weight="400" text-anchor="start">midea make / 看板「影片製作」· 12 條管線共用此骨架</text>
+<rect x="60.0" y="148" width="97.2" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="108.6" y="176" font-size="13.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 企劃</text>
+<text x="108.6" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">Qwen</text>
+<line x1="158.2" y1="186" x2="168.2" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="169.2" y="148" width="97.2" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="217.79999999999998" y="176" font-size="13.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 腳本</text>
+<text x="217.79999999999998" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">Qwen</text>
+<line x1="267.4" y1="186" x2="277.4" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="278.4" y="148" width="97.2" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="327.0" y="176" font-size="13.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 分鏡</text>
+<text x="327.0" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">含預估花費</text>
+<line x1="376.59999999999997" y1="186" x2="386.59999999999997" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="387.6" y="148" width="97.2" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="436.20000000000005" y="176" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">旁白</text>
+<text x="436.20000000000005" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">VoxCPM2</text>
+<line x1="485.8" y1="186" x2="495.8" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="496.8" y="148" width="97.2" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="545.4" y="176" font-size="13.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 素材</text>
+<text x="545.4" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">H3 · 真實素材</text>
+<text x="545.4" y="211" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">動態圖形</text>
+<line x1="595.0" y1="186" x2="605.0" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="606.0" y="148" width="97.2" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="654.6" y="176" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">配樂音效</text>
+<text x="654.6" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">ACE-Step</text>
+<text x="654.6" y="211" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">Foley · SFX</text>
+<line x1="704.2" y1="186" x2="714.2" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="715.2" y="148" width="97.2" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="763.8000000000001" y="176" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">剪輯</text>
+<text x="763.8000000000001" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">轉場、字幕對齊</text>
+<line x1="813.4000000000001" y1="186" x2="823.4000000000001" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="824.4" y="148" width="97.2" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="873.0" y="176" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">合成</text>
+<text x="873.0" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">響度、調色</text>
+<text x="873.0" y="211" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">燒字幕</text>
+<line x1="922.6" y1="186" x2="932.6" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="933.6" y="148" width="97.2" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="982.2" y="176" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">自我審核</text>
+<text x="982.2" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">QA 11 類</text>
+<line x1="1031.8" y1="186" x2="1041.8" y2="186" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="1042.8000000000002" y="148" width="97.2" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="1091.4" y="176" font-size="13.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 發佈</text>
+<text x="1091.4" y="196" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">寫入 final/</text>
+<rect x="40" y="266" width="1120" height="150" rx="14" fill="#222a39" stroke="#4a556b" stroke-width="1.2"/>
+<text x="60" y="294" font-size="17" fill="#e9edf4" font-weight="600" text-anchor="start">廣告製作 ad-60</text>
+<text x="256" y="294" font-size="13" fill="#9ba6b8" font-weight="400" text-anchor="start">看板「廣告製作」· 標準或時尚大片風格</text>
+<rect x="60.0" y="314" width="79.0" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="99.5" y="342" font-size="12.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 商品解析</text>
+<text x="99.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">事實表、去背</text>
+<text x="99.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">主色</text>
+<line x1="140.0" y1="352" x2="150.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="151.0" y="314" width="79.0" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="190.5" y="342" font-size="12.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 商品定裝</text>
+<text x="190.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">Qwen-Edit</text>
+<text x="190.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">姿態驗收</text>
+<line x1="231.0" y1="352" x2="241.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="242.0" y="314" width="79.0" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="281.5" y="342" font-size="12.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 創意提案</text>
+<text x="281.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">3 方向</text>
+<text x="281.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">10 秒預覽</text>
+<line x1="322.0" y1="352" x2="332.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="333.0" y="314" width="79.0" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="372.5" y="342" font-size="12.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 文案大綱</text>
+<text x="372.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">宣稱檢查</text>
+<text x="372.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">雙語</text>
+<line x1="413.0" y1="352" x2="423.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="424.0" y="314" width="79.0" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="463.5" y="342" font-size="12.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 分鏡</text>
+<text x="463.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">關鍵分鏡圖</text>
+<text x="463.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">規則檢查</text>
+<line x1="504.0" y1="352" x2="514.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="515.0" y="314" width="79.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="554.5" y="342" font-size="12.5" fill="#e9edf4" font-weight="600" text-anchor="middle">旁白</text>
+<text x="554.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">演員聲音</text>
+<text x="554.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">或低沉旁白</text>
+<line x1="595.0" y1="352" x2="605.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="606.0" y="314" width="79.0" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="645.5" y="342" font-size="12.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 素材</text>
+<text x="645.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">H3 I2V</text>
+<text x="645.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">分鏡圖為首格</text>
+<line x1="686.0" y1="352" x2="696.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="697.0" y="314" width="79.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="736.5" y="342" font-size="12.5" fill="#e9edf4" font-weight="600" text-anchor="middle">配樂</text>
+<text x="736.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">ACE-Step</text>
+<line x1="777.0" y1="352" x2="787.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="788.0" y="314" width="79.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="827.5" y="342" font-size="12.5" fill="#e9edf4" font-weight="600" text-anchor="middle">剪輯合成</text>
+<text x="827.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">字卡、片尾卡</text>
+<line x1="868.0" y1="352" x2="878.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="879.0" y="314" width="79.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="918.5" y="342" font-size="12.5" fill="#e9edf4" font-weight="600" text-anchor="middle">多版本</text>
+<text x="918.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">60/15 秒 ×</text>
+<text x="918.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">16:9 9:16 1:1</text>
+<line x1="959.0" y1="352" x2="969.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="970.0" y="314" width="79.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="1009.5" y="342" font-size="12.5" fill="#e9edf4" font-weight="600" text-anchor="middle">自我審核</text>
+<text x="1009.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">＋廣告檢查</text>
+<line x1="1050.0" y1="352" x2="1060.0" y2="352" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="1061.0" y="314" width="79.0" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="1100.5" y="342" font-size="12.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 發佈</text>
+<text x="1100.5" y="362" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">6 支影片</text>
+<text x="1100.5" y="377" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">＋附件</text>
+<rect x="40" y="432" width="1120" height="150" rx="14" fill="#222a39" stroke="#4a556b" stroke-width="1.2"/>
+<text x="60" y="460" font-size="17" fill="#e9edf4" font-weight="600" text-anchor="start">虛擬演員</text>
+<text x="148" y="460" font-size="13" fill="#9ba6b8" font-weight="400" text-anchor="start">看板「演員陣容」· 完成後可在任何描述中以 @代號 指定演出</text>
+<rect x="60.0" y="480" width="144.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="132.0" y="508" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">一句話描述</text>
+<text x="132.0" y="528" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">Qwen 補完設定</text>
+<line x1="205.0" y1="518" x2="215.0" y2="518" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="216.0" y="480" width="144.0" height="76" rx="10" fill="#323b4e" stroke="#f2b84b" stroke-width="1.6"/>
+<text x="288.0" y="508" font-size="13.5" fill="#f2b84b" font-weight="700" text-anchor="middle">◆ 定妝照</text>
+<text x="288.0" y="528" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">Z-Image</text>
+<text x="288.0" y="543" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">大頭＋全身</text>
+<line x1="361.0" y1="518" x2="371.0" y2="518" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="372.0" y="480" width="144.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="444.0" y="508" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">三視圖</text>
+<text x="444.0" y="528" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">Qwen-Edit</text>
+<text x="444.0" y="543" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">¾、側面、背面</text>
+<line x1="517.0" y1="518" x2="527.0" y2="518" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="528.0" y="480" width="144.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="600.0" y="508" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">姿態驗收</text>
+<text x="600.0" y="528" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">RTMW</text>
+<text x="600.0" y="543" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">失敗自動重生</text>
+<line x1="673.0" y1="518" x2="683.0" y2="518" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="684.0" y="480" width="144.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="756.0" y="508" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">專屬聲音</text>
+<text x="756.0" y="528" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">VoxCPM2</text>
+<text x="756.0" y="543" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">各語言樣本</text>
+<line x1="829.0" y1="518" x2="839.0" y2="518" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="840.0" y="480" width="144.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="912.0" y="508" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">說話影片</text>
+<text x="912.0" y="528" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">H3 對嘴</text>
+<text x="912.0" y="543" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">字錯率＋聲紋</text>
+<line x1="985.0" y1="518" x2="995.0" y2="518" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="996.0" y="480" width="144.0" height="76" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="1068.0" y="508" font-size="13.5" fill="#e9edf4" font-weight="600" text-anchor="middle">可被 @ 使用</text>
+<text x="1068.0" y="528" font-size="11" fill="#9ba6b8" font-weight="400" text-anchor="middle">跨片同臉同聲</text>
+<text x="60" y="612" font-size="13" fill="#9ba6b8" font-weight="400" text-anchor="start">外貌或聲音修改後，三視圖與說話影片會標記為過期，演員頁會提示重做；演員頁也列出他出演過的所有影片。</text>
+</svg>

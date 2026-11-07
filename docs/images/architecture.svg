@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Midea 系統架構" font-family="'PingFang TC','Noto Sans CJK TC','Microsoft JhengHei','Noto Sans TC',system-ui,sans-serif">
+<title>Midea 系統架構</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9ba6b8"/></marker><marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f2b84b"/></marker></defs>
+<rect width="1200" height="800" rx="16" fill="#1d2330"/>
+<text x="40" y="52" font-size="26" fill="#e9edf4" font-weight="700" text-anchor="start">系統架構</text>
+<text x="40" y="78" font-size="14" fill="#9ba6b8" font-weight="400" text-anchor="start">一台單卡 GPU 伺服器上的完整影片工作室：看板與導演程式在上層，模型服務在下層，由 GPU 排程器輪流使用顯示卡</text>
+<rect x="40" y="104" width="340" height="70" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="40" y="114" width="3" height="50" rx="1.5" fill="#f2b84b"/>
+<text x="54" y="128" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">瀏覽器 · 分鏡看板</text>
+<text x="54" y="148" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">http://&lt;伺服器&gt;:10030（需登入）</text>
+<rect x="400" y="104" width="260" height="70" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="400" y="114" width="3" height="50" rx="1.5" fill="#f2b84b"/>
+<text x="414" y="128" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">命令列 CLI</text>
+<text x="414" y="148" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">python -m midea make / approve …</text>
+<rect x="680" y="104" width="480" height="70" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="680" y="114" width="3" height="50" rx="1.5" fill="#f2b84b"/>
+<text x="694" y="128" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">SSE 即時事件</text>
+<text x="694" y="148" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">進度、關卡、費用即時推送到看板</text>
+<rect x="40" y="196" width="840" height="352" rx="14" fill="#222a39" stroke="#4a556b" stroke-width="1.2"/>
+<text x="60" y="224" font-size="16" fill="#e9edf4" font-weight="600" text-anchor="start">Midea 應用程式（Python · /workspace/midea/app）</text>
+<rect x="60" y="240" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="60" y="250" width="3" height="72" rx="1.5" fill="#b7a6ff"/>
+<text x="74" y="264" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">web/app.py</text>
+<text x="74" y="284" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">FastAPI 看板與 API</text>
+<text x="74" y="302" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">HTTP Basic 登入、SSE</text>
+<rect x="328" y="240" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="328" y="250" width="3" height="72" rx="1.5" fill="#f2b84b"/>
+<text x="342" y="264" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">pipelines/runner.py</text>
+<text x="342" y="284" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">階段機：checkpoint、審核關卡</text>
+<text x="342" y="302" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">修訂迴圈、成本、QA、發佈</text>
+<rect x="596" y="240" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="596" y="250" width="3" height="72" rx="1.5" fill="#f2b84b"/>
+<text x="610" y="264" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">pipelines/ad.py</text>
+<text x="610" y="284" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">AdRunner：商品、試穿、提案</text>
+<text x="610" y="302" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">文案、分鏡、多版本、風格</text>
+<rect x="60" y="344" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="60" y="354" width="3" height="72" rx="1.5" fill="#b7a6ff"/>
+<text x="74" y="368" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">actors.py</text>
+<text x="74" y="388" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">虛擬演員：設定、定妝照</text>
+<text x="74" y="406" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">三視圖、聲音、說話影片</text>
+<rect x="328" y="344" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="328" y="354" width="3" height="72" rx="1.5" fill="#b7a6ff"/>
+<text x="342" y="368" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">tools/ · motion/</text>
+<text x="342" y="388" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">146 種工具：剪輯、字幕、音訊</text>
+<text x="342" y="406" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">逐格動態圖形渲染（Playwright）</text>
+<rect x="596" y="344" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="596" y="354" width="3" height="72" rx="1.5" fill="#b7a6ff"/>
+<text x="610" y="368" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">qa.py · cost.py</text>
+<text x="610" y="388" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">自我審核 11 類檢查</text>
+<text x="610" y="406" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">GPU 秒 → kWh → 新台幣</text>
+<rect x="60" y="448" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="60" y="458" width="3" height="72" rx="1.5" fill="#b7a6ff"/>
+<text x="74" y="472" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">providers/</text>
+<text x="74" y="492" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">各模型的用戶端</text>
+<text x="74" y="510" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">LLM、H3、影像、聲音、ASR</text>
+<rect x="328" y="448" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="328" y="458" width="3" height="72" rx="1.5" fill="#b7a6ff"/>
+<text x="342" y="472" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">vision_check.py</text>
+<text x="342" y="492" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">RTMW 全身姿態驗收</text>
+<text x="342" y="510" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">腳部、側面、背面、跳切</text>
+<rect x="596" y="448" width="256" height="92" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="596" y="458" width="3" height="72" rx="1.5" fill="#b7a6ff"/>
+<text x="610" y="472" font-size="15" fill="#e9edf4" font-weight="600" text-anchor="start">project.py</text>
+<text x="610" y="492" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">專案儲存、事件匯流排</text>
+<text x="610" y="510" font-size="12.5" fill="#9ba6b8" font-weight="400" text-anchor="start">關卡決定（重啟後仍有效）</text>
+<rect x="900" y="196" width="260" height="352" rx="14" fill="#222a39" stroke="#4a556b" stroke-width="1.2"/>
+<text x="920" y="224" font-size="16" fill="#e9edf4" font-weight="600" text-anchor="start">工作區（磁碟）</text>
+<rect x="916" y="240" width="228" height="104" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="916" y="250" width="3" height="84" rx="1.5" fill="#7fd1c2"/>
+<text x="930" y="264" font-size="14" fill="#e9edf4" font-weight="600" text-anchor="start">projects/&lt;id&gt;/</text>
+<text x="930" y="284" font-size="12" fill="#9ba6b8" font-weight="400" text-anchor="start">project.json 狀態與關卡</text>
+<text x="930" y="302" font-size="12" fill="#9ba6b8" font-weight="400" text-anchor="start">stages/*.json 每階段存檔</text>
+<text x="930" y="320" font-size="12" fill="#9ba6b8" font-weight="400" text-anchor="start">scenes/ audio/ compose/</text>
+<text x="930" y="338" font-size="12" fill="#9ba6b8" font-weight="400" text-anchor="start">final/ 成片與附件</text>
+<rect x="916" y="356" width="228" height="86" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="916" y="366" width="3" height="66" rx="1.5" fill="#7fd1c2"/>
+<text x="930" y="380" font-size="14" fill="#e9edf4" font-weight="600" text-anchor="start">_actors/&lt;id&gt;/</text>
+<text x="930" y="400" font-size="12" fill="#9ba6b8" font-weight="400" text-anchor="start">actor.json 設定</text>
+<text x="930" y="418" font-size="12" fill="#9ba6b8" font-weight="400" text-anchor="start">portraits/ 定妝照、三視圖</text>
+<text x="930" y="436" font-size="12" fill="#9ba6b8" font-weight="400" text-anchor="start">voice/ intro/ 聲音、說話影片</text>
+<rect x="916" y="454" width="228" height="50" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<rect x="916" y="464" width="3" height="30" rx="1.5" fill="#7fd1c2"/>
+<text x="930" y="478" font-size="14" fill="#e9edf4" font-weight="600" text-anchor="start">logs/board.log</text>
+<text x="930" y="498" font-size="12" fill="#9ba6b8" font-weight="400" text-anchor="start">看板與排程紀錄</text>
+<rect x="40" y="568" width="1120" height="62" rx="12" fill="#323b4e" stroke="#f2b84b" stroke-width="1.2"/>
+<text x="60" y="594" font-size="16" fill="#f2b84b" font-weight="700" text-anchor="start">GPU 排程器 gpu/manager.py</text>
+<text x="60" y="616" font-size="13" fill="#9ba6b8" font-weight="400" text-anchor="start">租約：H3 獨佔整張卡；其他服務在 VRAM 預算內共存，超出時依 LRU 卸載 · 卡忙時排隊等待 · 閒置 600 秒自動停止並釋放顯存 · 依專案／演員計費</text>
+<rect x="40.0" y="652" width="151.42857142857142" height="84" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="115.71428571428571" y="676" font-size="13" fill="#e9edf4" font-weight="600" text-anchor="middle">Qwen3.8-Flash-Next</text>
+<text x="115.71428571428571" y="696" font-size="12.5" fill="#f2b84b" font-weight="500" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,monospace">:8080 Strata</text>
+<text x="115.71428571428571" y="718" font-size="11.5" fill="#9ba6b8" font-weight="400" text-anchor="middle">企劃、腳本、分鏡、審片</text>
+<rect x="201.42857142857142" y="652" width="151.42857142857142" height="84" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="277.1428571428571" y="676" font-size="13" fill="#e9edf4" font-weight="600" text-anchor="middle">ComfyUI</text>
+<text x="277.1428571428571" y="696" font-size="12.5" fill="#f2b84b" font-weight="500" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,monospace">:8781</text>
+<text x="277.1428571428571" y="718" font-size="11.5" fill="#9ba6b8" font-weight="400" text-anchor="middle">H3 · Z-Image · Qwen-Edit</text>
+<rect x="362.85714285714283" y="652" width="151.42857142857142" height="84" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="438.57142857142856" y="676" font-size="13" fill="#e9edf4" font-weight="600" text-anchor="middle">VoxCPM2</text>
+<text x="438.57142857142856" y="696" font-size="12.5" fill="#f2b84b" font-weight="500" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,monospace">:8782</text>
+<text x="438.57142857142856" y="718" font-size="11.5" fill="#9ba6b8" font-weight="400" text-anchor="middle">旁白、聲音複製、聲紋</text>
+<rect x="524.2857142857142" y="652" width="151.42857142857142" height="84" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="599.9999999999999" y="676" font-size="13" fill="#e9edf4" font-weight="600" text-anchor="middle">ACE-Step 1.5</text>
+<text x="599.9999999999999" y="696" font-size="12.5" fill="#f2b84b" font-weight="500" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,monospace">:8783</text>
+<text x="599.9999999999999" y="718" font-size="11.5" fill="#9ba6b8" font-weight="400" text-anchor="middle">配樂</text>
+<rect x="685.7142857142857" y="652" width="151.42857142857142" height="84" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="761.4285714285713" y="676" font-size="13" fill="#e9edf4" font-weight="600" text-anchor="middle">HunyuanVideo-Foley</text>
+<text x="761.4285714285713" y="696" font-size="12.5" fill="#f2b84b" font-weight="500" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,monospace">:8784</text>
+<text x="761.4285714285713" y="718" font-size="11.5" fill="#9ba6b8" font-weight="400" text-anchor="middle">畫面音效</text>
+<rect x="847.1428571428571" y="652" width="151.42857142857142" height="84" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="922.8571428571428" y="676" font-size="13" fill="#e9edf4" font-weight="600" text-anchor="middle">SFX</text>
+<text x="922.8571428571428" y="696" font-size="12.5" fill="#f2b84b" font-weight="500" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,monospace">:8785</text>
+<text x="922.8571428571428" y="718" font-size="11.5" fill="#9ba6b8" font-weight="400" text-anchor="middle">文字→音效</text>
+<rect x="1008.5714285714284" y="652" width="151.42857142857142" height="84" rx="10" fill="#272f3f" stroke="#4a556b" stroke-width="1.2"/>
+<text x="1084.2857142857142" y="676" font-size="13" fill="#e9edf4" font-weight="600" text-anchor="middle">faster-whisper</text>
+<text x="1084.2857142857142" y="696" font-size="12.5" fill="#f2b84b" font-weight="500" text-anchor="middle" font-family="'SF Mono',Menlo,Consolas,monospace">看板內</text>
+<text x="1084.2857142857142" y="718" font-size="11.5" fill="#9ba6b8" font-weight="400" text-anchor="middle">字幕對齊、字錯率</text>
+<rect x="40" y="750" width="1120" height="30" rx="8" fill="#161b25" stroke="#4a556b" stroke-width="1.2"/>
+<text x="600" y="770" font-size="13" fill="#9ba6b8" font-weight="400" text-anchor="middle">NVIDIA RTX A6000 48 GB · 系統記憶體 188 GB（Qwen 的 MoE 專家層放在 CPU）</text>
+<line x1="210" y1="174" x2="210" y2="238" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<line x1="530" y1="174" x2="530" y2="196" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<path d="M 920 174 L 920 186 L 600 186 L 600 238" fill="none" stroke="#9ba6b8" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<line x1="880" y1="372" x2="900" y2="372" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<line x1="460" y1="548" x2="460" y2="566" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+<line x1="600" y1="630" x2="600" y2="650" stroke="#9ba6b8" stroke-width="1.6" marker-end="url(#a)"/>
+</svg>
