@@ -4,7 +4,7 @@
   midea make "二戰後的台北" --real-only --duration 90   # 只用真實素材
   midea make "咖啡沖煮技巧" --ref https://youtube.com/shorts/xxxx
   midea serve                                          # 開啟分鏡看板 http://127.0.0.1:7788
-  midea site                                           # 公開網站 midea.cafeca.io（http://127.0.0.1:10031）
+  midea site                                           # 公開網站 midea.cafeca.io（http://127.0.0.1:10030）
   midea site plan-week                                 # 立即重排本週與下週節目表、重新歸納主題
   midea approve <project> scene_plan [--reject --note "..."]
   midea services status | up qwen | down h3
@@ -78,7 +78,7 @@ def cmd_site(a: argparse.Namespace) -> None:
     from .config import settings
     from .site.app import app
     uvicorn.run(app, host=a.host or settings().get("site.host", "127.0.0.1"),
-                port=a.port or int(settings().get("site.port", 10031)), log_level="warning", proxy_headers=True)
+                port=a.port or int(settings().get("site.port", 10030)), log_level="warning", proxy_headers=True)
 
 
 def cmd_approve(a: argparse.Namespace) -> None:

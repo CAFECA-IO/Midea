@@ -1,6 +1,6 @@
 """midea.cafeca.io — public pages, media and /api/public/v1 (phase 1 of the audience-feedback plan).
 
-Run with `midea site` (default 127.0.0.1:10031; put it behind HTTPS at the site origin for CAFECA sign-in).
+Run with `midea site` (default 127.0.0.1:10030; put it behind HTTPS at the site origin for CAFECA sign-in).
 State-changing calls need the `X-Midea: 1` header (cross-site forms cannot send it) and same-site cookies.
 """
 from __future__ import annotations

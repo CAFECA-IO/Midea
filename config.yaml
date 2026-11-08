@@ -207,7 +207,7 @@ server:
 # ---- 公開網站 midea.cafeca.io（midea site）--------------------------------------
 site:
   host: 127.0.0.1                  # 由 HTTPS 反向代理轉到這裡；CAFECA 登入只接受與 origin 完全相同的網域
-  port: ${MIDEA_SITE_PORT:-10031}
+  port: ${MIDEA_SITE_PORT:-10030}
   origin: ${MIDEA_SITE_ORIGIN:-https://midea.cafeca.io}
   data_dir: ${MIDEA_SITE_DATA:-}   # 空白 = <workspace>/_site（site.db、節目表、主題）
   catalog_ttl_s: 120
