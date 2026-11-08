@@ -1,0 +1,79 @@
+/* Midea — generated from tokens.json by scripts/gen_tokens_css.py; do not edit by hand */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #12100e;
+  --surface: #1c1916;
+  --surface-raised: #241f1a;
+  --line: #2f2924;
+  --ink: #f3eee6;
+  --ink-muted: #b8b0a4;
+  --ink-subtle: #9d958a;
+  --amber: #f2b84b;
+  --amber-soft: #3a2d10;
+  --amber-text: #e3c48a;
+  --on-amber: #14110c;
+  --live: #cf3339;
+  --on-live: #ffffff;
+  --rank-up: #b9e6a8;
+  --rank-up-soft: #2f4a2a;
+  --rank-down: #f0b4a6;
+  --rank-down-soft: #3a2622;
+  --neutral-soft: #2a2622;
+  --scrim: rgba(18, 16, 14, 0.92);
+  --on-image: #f3eee6;
+  --focus: #f2b84b;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --ground: #faf7f2;
+  --surface: #ffffff;
+  --surface-raised: #f1ece4;
+  --line: #e2dbd0;
+  --ink: #1d1915;
+  --ink-muted: #5f574d;
+  --ink-subtle: #6e655a;
+  --amber: #93560b;
+  --amber-soft: #fbecd0;
+  --amber-text: #7a4a08;
+  --on-amber: #ffffff;
+  --live: #cf3339;
+  --on-live: #ffffff;
+  --rank-up: #2f6b1f;
+  --rank-up-soft: #e3f2dc;
+  --rank-down: #9a3a26;
+  --rank-down-soft: #f8e1da;
+  --neutral-soft: #efe9e1;
+  --scrim: rgba(18, 16, 14, 0.88);
+  --on-image: #f3eee6;
+  --focus: #93560b;
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 10px;
+  --space-4: 14px;
+  --space-5: 20px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --row-hero: 230px;
+  --row-rank: 170px;
+  --row-topic: 180px;
+  --touch-min: 44px;
+  --content-max: 1360px;
+  --font-sans: Inter, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+.display-xl { font-family: var(--font-sans); font-size: 46px; line-height: 48px; font-weight: 900; }
+.display-lg { font-family: var(--font-sans); font-size: 30px; line-height: 35px; font-weight: 900; }
+.rank-numeral { font-family: var(--font-sans); font-size: 230px; line-height: 230px; font-weight: 900; }
+.title { font-family: var(--font-sans); font-size: 24px; line-height: 30px; font-weight: 900; }
+.title-sm { font-family: var(--font-sans); font-size: 20px; line-height: 26px; font-weight: 800; }
+.item { font-family: var(--font-sans); font-size: 15px; line-height: 21px; font-weight: 800; }
+.body { font-family: var(--font-sans); font-size: 15px; line-height: 24px; font-weight: 400; }
+.caption { font-family: var(--font-sans); font-size: 13px; line-height: 20px; font-weight: 400; }
+.meta { font-family: var(--font-sans); font-size: 12px; line-height: 18px; font-weight: 500; }
+.label { font-family: var(--font-sans); font-size: 12px; line-height: 16px; font-weight: 800; letter-spacing: 0.04em; }

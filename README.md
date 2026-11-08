@@ -18,7 +18,7 @@
 
 ## 目錄
 
-[系統架構](#系統架構) · [運作原理](#運作原理) · [工作流程](#工作流程) · [操作說明](#操作說明) · [四大功能](#四大功能) · [虛擬演員](#虛擬演員-指定演出) · [60 秒廣告](#60-秒廣告ad-60) · [快速開始](#快速開始) · [程式結構](#程式結構)
+[系統架構](#系統架構) · [運作原理](#運作原理) · [工作流程](#工作流程) · [操作說明](#操作說明) · [設計系統](#設計系統) · [四大功能](#四大功能) · [虛擬演員](#虛擬演員-指定演出) · [60 秒廣告](#60-秒廣告ad-60) · [快速開始](#快速開始) · [程式結構](#程式結構)
 
 ## 系統架構
 
@@ -250,6 +250,10 @@ python -m midea services status                          # 查看 VRAM 配置
 - **24 GB**（RTX 4090／5090）：在 `config.yaml` 設 `gpu.vram_gb: 24`，H3 改為 1024×576、24 steps，每鏡 ≤ 8 秒。成本估算會自動乘 1.8 倍時間。
 - **系統記憶體 ≥ 128 GB**：Qwen3.8-Flash-Next 4-bit 約需 96–114 GB（RAM + VRAM），H3 的 offload 約需 64 GB 以上。記憶體不足時可以在 `services.qwen` 把 `base_url` 指到另一台機器的 OpenAI 相容端點。
 
+## 設計系統
+
+網站與介面的設計語言、token 與元件放在 [docs/design-system/](docs/design-system/README.md)。規劃或開發頁面時先讀它；規則寫在 [CLAUDE.md](CLAUDE.md)。
+
 ## 伺服器部署
 
 共用 GPU 伺服器（cafeca-aich-001）的部署方式、port 配置、接 Strata Qwen 端點與 GPU 共用策略見 [docs/DEPLOY.md](docs/DEPLOY.md)；一鍵安裝模型堆疊：`MIDEA_STACK=/workspace/midea bash scripts/deploy_server.sh`。
@@ -280,6 +284,8 @@ midea/
 pipeline_defs/*.yaml                 13 條管線定義（階段、關卡、風格預設）
 workflows/                           MiniMax H3 ComfyUI API workflow（自行匯出）
 scripts/gen_readme_diagrams.py       產生本文件的 SVG 圖（docs/images/）
+scripts/gen_tokens_css.py            由 docs/design-system/tokens.json 產生 tokens.css
+docs/design-system/                  網站設計系統：設計語言、版面、元件規劃、token、元件
 ```
 
 在沒有 GPU 的環境可以用 `MIDEA_MODE=mock`：Qwen 改由決定性規劃器代答，影像、聲音、音樂改用程式產生的佔位素材，其餘剪輯、字幕、動態圖形、QA、看板都會真實執行。
