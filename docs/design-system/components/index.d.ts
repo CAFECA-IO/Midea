@@ -2,7 +2,7 @@ import type * as React from 'react';
 
 export type IconName = 'search' | 'play' | 'key' | 'sound-off' | 'arrow-right' | 'chevron-right'
   | 'heart' | 'sparkle' | 'smile' | 'tear' | 'plus' | 'x' | 'bookmark' | 'share' | 'eye' | 'people' | 'sound' | 'expand'
-  | 'home' | 'calendar' | 'grid' | 'user' | 'check' | 'flag' | 'send' | 'chat' | 'star' | 'back' | 'list' | 'cc' | 'rotate';
+  | 'home' | 'calendar' | 'grid' | 'user' | 'check' | 'flag' | 'send' | 'chat' | 'star' | 'back' | 'pause' | 'list' | 'cc' | 'rotate';
 export type Move = 'new' | 'up' | 'down' | 'same';
 
 export interface LogoProps { size?: number; mark?: boolean; href?: string }

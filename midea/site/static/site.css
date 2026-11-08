@@ -141,3 +141,47 @@ body.is-immersive .site-wrap { padding: 0; }
 .imv-next { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 @keyframes imv-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .imv-top, .imv-title, .imv-ctl, .imv-ticker, .imv-bar, .imv-card { transition: none; } .imv-sheet { animation: none; } }
+
+/* ---- 手機影片頁：沉浸模式（與直播 M1 同一套）---- */
+.imv-unmute { position: absolute; right: 14px; top: calc(14px + env(safe-area-inset-top)); display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px;
+  border-radius: var(--radius-pill); border: 0; background: color-mix(in srgb, var(--ground) 60%, transparent); color: var(--on-image); font: inherit; font-size: 12px; font-weight: 700; z-index: 2; }
+.imv-play { position: absolute; left: 50%; top: 50%; width: 68px; height: 68px; margin: -34px 0 0 -34px; border-radius: 50%; border: 0;
+  background: color-mix(in srgb, var(--ground) 55%, transparent); color: var(--on-image); display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity 200ms ease-out; }
+.imv.is-ui .imv-play { opacity: 1; pointer-events: auto; }
+.imv-seek { position: absolute; left: 16px; right: 16px; bottom: calc(86px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; opacity: 0; pointer-events: none; transition: opacity 200ms ease-out; }
+.imv.is-ui .imv-seek { opacity: 1; pointer-events: auto; }
+.imv-time { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--on-image); opacity: 0.85; min-width: 34px; }
+.imv-track { position: relative; flex: 1; height: 28px; display: flex; align-items: center; }
+.imv-track input { width: 100%; margin: 0; height: 28px; background: transparent; -webkit-appearance: none; appearance: none; }
+.imv-track input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--amber) var(--p), color-mix(in srgb, var(--on-image) 22%, transparent) var(--p)); }
+.imv-track input::-moz-range-track { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--on-image) 22%, transparent); }
+.imv-track input::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--amber); }
+.imv-track input::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--on-image); border: 0; }
+.imv-track input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--on-image); border: 0; }
+.imv-track input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.imv-mark { position: absolute; top: 50%; width: 12px; height: 12px; margin: -10px 0 0 -6px; border-radius: 50%; border: 2px solid var(--amber); background: var(--ground); padding: 0; }
+.imv-mark::after { content: ""; position: absolute; inset: -14px; }                 /* 40px touch target */
+.imv-bar-vod .imv-react-note { flex: 1; font-size: 13px; color: var(--on-image); opacity: 0.8; }
+.imv-heart.is-off { background: color-mix(in srgb, var(--surface) 86%, transparent); color: var(--on-image); }
+.imv-reacts-vod { right: auto; left: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); flex-direction: column; align-items: flex-start; border-radius: var(--radius-lg); padding: 8px; }
+.imv-endcard { right: 14px; }
+.imv-next-up { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: var(--radius-md); background: var(--surface-raised); color: var(--ink); text-decoration: none; }
+.imv-next-up img { width: 88px; height: 50px; object-fit: cover; border-radius: var(--radius-sm); flex: none; }
+.imv-next-up span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.imv-next-up b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.imv-desc { margin: 0; font-size: 14px; line-height: 22px; color: var(--ink-muted); }
+.imv.is-ui .imv-unmute { opacity: 0; pointer-events: none; }
+
+/* ---- 手機：其他頁面 ---- */
+@media (max-width: 639px) {
+  .qrow { flex-wrap: wrap; row-gap: 6px; }
+  .qbody { flex: 1 1 calc(100% - 40px); }
+  .qacts { margin-left: 38px; }
+  .actor-top { grid-auto-rows: auto; }
+  .actor-top .md-tile { min-height: 260px; }
+  .actor-name { font-size: 26px; line-height: 32px; }
+  .wish-layout { grid-template-columns: 1fr; }
+  .home-wishes, .wish-grid { grid-template-columns: 1fr; }
+}
+.qacts { display: flex; align-items: center; gap: 6px; }
+.imv-more .versions a.md-chip { text-decoration: none; }

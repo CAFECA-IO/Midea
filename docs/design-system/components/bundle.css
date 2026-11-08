@@ -227,7 +227,7 @@ a, button { -webkit-tap-highlight-color: transparent; }
 
 /* LivePlayer / VideoPlayer */
 .md-player { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius-xl); overflow: hidden; background: var(--ground); color: var(--on-image); }
-.md-player.is-vertical { aspect-ratio: 9 / 16; max-height: 78vh; margin: 0 auto; }
+.md-player.is-vertical { aspect-ratio: 9 / 16; width: min(100%, calc(78vh * 9 / 16)); margin: 0 auto; }
 .md-player video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: var(--ground); }
 .md-player-live video { object-fit: cover; }
 .md-player-scrim { pointer-events: none; }
@@ -357,6 +357,25 @@ a, button { -webkit-tap-highlight-color: transparent; }
 .md-sday.is-today .md-sday-d { color: var(--amber); }
 .md-sday-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 @media (max-width: 639px) { .md-sday { grid-template-columns: 1fr; } }
+
+/* ================================================================ phones: shared fixes */
+.md-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.md-seg::-webkit-scrollbar { display: none; }
+.md-seg-btn { white-space: nowrap; flex: none; }
+@media (max-width: 639px) {
+  .md-header { padding: 14px 0; }
+  .md-header .md-nav { display: none; }                       /* BottomNav takes over */
+  .md-header-end { flex: 1 1 auto; }
+  .md-vtile-hero .md-vtile-title { font-size: 30px; line-height: 34px; }
+  .md-vtile-hero .md-vtile-sub { font-size: 13px; line-height: 19px; }
+  .md-bento-hero { grid-auto-rows: minmax(var(--row-hero), auto); }
+  .md-poll.md-r2 { grid-row: span 1; }
+  .md-poll-full { padding: 18px; }
+  .md-poll-full .md-poll-title { font-size: 22px; line-height: 28px; }
+  .md-poll-full .md-poll-thumbs img { height: 64px; }
+  .md-sechead-title { font-size: 22px; line-height: 28px; }
+  .md-bnav { grid-template-columns: repeat(5, 1fr); }
+}
 
 /* preview helpers */
 .md-pv { padding: 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; box-sizing: border-box; }

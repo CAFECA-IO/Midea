@@ -62,10 +62,11 @@
             return h('li', { key: q.id, className: 'qrow' },
               h('span', { className: 'qrank' + (i < 3 && order === 'top' ? ' is-top' : '') }, i + 1),
               h('span', { className: 'qbody' }, h('span', null, q.text), h('span', { className: 'md-meta' }, q.by + (q.picked ? ' · 入選影片回答' : ''))),
-              q.reply ? h('span', { className: 'md-reply-label' }, AI) : null,
-              h('button', { type: 'button', className: 'md-iconbtn', 'aria-label': '檢舉', title: '檢舉', onClick: function () { S.report('question', q.id); } }, h(M.Icon, { name: 'flag', size: 14 })),
-              h('button', { type: 'button', className: 'md-chip md-chip-sm' + (q.supported ? ' is-on' : ''), 'aria-pressed': q.supported ? 'true' : 'false', onClick: function () { support(q); } },
-                (q.supported ? '已 +1 · ' : '+1 · ') + q.supporters));
+              h('span', { className: 'qacts' },
+                q.reply ? h('span', { className: 'md-reply-label' }, AI) : null,
+                h('button', { type: 'button', className: 'md-iconbtn', 'aria-label': '檢舉', title: '檢舉', onClick: function () { S.report('question', q.id); } }, h(M.Icon, { name: 'flag', size: 14 })),
+                h('button', { type: 'button', className: 'md-chip md-chip-sm' + (q.supported ? ' is-on' : ''), 'aria-pressed': q.supported ? 'true' : 'false', onClick: function () { support(q); } },
+                  (q.supported ? '已 +1 · ' : '+1 · ') + q.supporters)));
           })) : h(M.EmptyState, { title: order === 'answered' ? '還沒有影片回答' : '還沒有人提問', body: order === 'answered' ? '演員信箱上線後，入選的問題會在這裡出現。' : '當第一個發問的人。' }))),
       d.works.length ? h('section', { className: 'sec', 'aria-labelledby': 'works' },
         h(M.SectionHeader, { id: 'works', title: '演出作品', meta: d.works.length + ' 部' }),

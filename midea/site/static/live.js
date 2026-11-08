@@ -290,6 +290,8 @@
         return h('span', { key: f.id, className: 'md-float' + (f.mine ? ' is-mine' : ''), style: { left: f.x + 'px', animationDelay: f.d + 'ms' } }, h(M.Icon, { name: f.icon, size: 22 }));
       })),
       hint && !ui ? h('span', { className: 'imv-hint' }, '點一下畫面顯示資訊　·　長按送出喜歡') : null,
+      muted && !ui ? h('button', { type: 'button', className: 'imv-unmute', onPointerDown: function (e) { e.stopPropagation(); }, onPointerUp: function (e) { e.stopPropagation(); },
+        onClick: function (e) { e.stopPropagation(); setMuted(false); } }, h(M.Icon, { name: 'sound-off', size: 16 }), '開啟聲音') : null,
 
       // revealed on tap
       h('div', { className: 'imv-top' },

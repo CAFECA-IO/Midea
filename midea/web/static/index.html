@@ -74,7 +74,7 @@ pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;backgr
 .consent{border:1px solid #f5a52466;background:#f5a52411;border-radius:var(--r);padding:10px 12px;margin-top:12px}
 .scene .cast{position:absolute;left:8px;bottom:8px;display:flex;gap:-4px}.scene .cast .av{width:26px;height:26px;border:2px solid #1a1e29;margin-right:-6px}
 @media (max-width:900px){.profile{grid-template-columns:1fr}.film{grid-template-columns:1fr}.fgrid{grid-template-columns:1fr}}
-@media (max-width:900px){.app{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:none}}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr);height:auto;min-height:100vh}aside{border-right:0;border-bottom:1px solid var(--line);max-height:none;overflow:visible;min-width:0}main{overflow:visible;min-width:0;padding:16px 16px 80px}.kv{grid-template-columns:110px 1fr}.fb{grid-template-columns:1fr}.grid{grid-template-columns:1fr!important}.rv .card{grid-template-columns:1fr}.gpu-card{display:none}.roster{grid-template-columns:1fr 1fr;gap:10px}h1{flex-wrap:wrap}body[data-view]:not([data-view=films]) aside .card,body[data-view]:not([data-view=films]) .plist{display:none}}
 .me{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-4px 0 12px;font-size:13px;color:var(--muted)}.me b{color:var(--fg)}
 .fb{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}.fb .card{display:flex;flex-direction:column;gap:8px}
 .fb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--bg)}.stat{display:flex;gap:16px;flex-wrap:wrap}.stat div{display:flex;flex-direction:column}.stat b{font-size:20px;font-weight:800}.stat span{font-size:12px;color:var(--muted)}
@@ -114,7 +114,7 @@ pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;backgr
     <label class="chk" id="f-auto-wrap"><input type="checkbox" id="f-auto"> 自動通過所有關卡（不建議）</label>
     <div style="margin-top:12px"><button class="primary" id="f-go" style="width:100%">開始製作</button></div>
   </div>
-  <div class="card" style="margin-top:12px">
+  <div class="card gpu-card" style="margin-top:12px">
     <h3>GPU</h3>
     <div id="gpu"></div>
   </div>
@@ -195,7 +195,7 @@ async function create() {
 }
 async function open(id) {
   setView("films"); clearInterval(ACTOR_POLL);
-  if (CUR !== id) { SEL.clear(); REGEN = {}; TAB = ""; }
+  if (CUR !== id) { SEL.clear(); REGEN = {}; TAB = ""; if (matchMedia("(max-width:900px)").matches) setTimeout(() => $("#main").scrollIntoView({ behavior: "smooth" }), 300); }
   CUR = id; location.hash = id; refreshList();
   if (ES) ES.close();
   ES = new EventSource(`${BASE}/api/events/${id}`);
@@ -353,7 +353,7 @@ function logTab() {
     <h2>GPU 用量</h2><div class="log">${(DATA.cost.lines || []).slice(-80).reverse().map(l => `${l.service} ${l.gpu_s}s → ${l.cost}`).join("<br>") || "—"}</div>`;
 }
 // ------------------------------------------------------------------ virtual actors
-function setView(v) { VIEW = v; $("#nav-films").classList.toggle("on", v === "films"); $("#nav-actors").classList.toggle("on", v === "actors" || v === "actor"); $("#nav-ads").classList.toggle("on", v === "ads"); $("#nav-fb").classList.toggle("on", v === "feedback"); $("#nav-rv").classList.toggle("on", v === "review"); }
+function setView(v) { VIEW = v; document.body.dataset.view = v; $("#nav-films").classList.toggle("on", v === "films"); $("#nav-actors").classList.toggle("on", v === "actors" || v === "actor"); $("#nav-ads").classList.toggle("on", v === "ads"); $("#nav-fb").classList.toggle("on", v === "feedback"); $("#nav-rv").classList.toggle("on", v === "review"); }
 function goFilms() { setView("films"); clearInterval(ACTOR_POLL); if (CUR) open(CUR); else { location.hash = ""; $("#main").innerHTML = `<div class="empty">選擇左側專案，或輸入一句話開始製作。</div>`; } }
 async function refreshActors() {
   try { ACTORS = await api("/api/actors"); $("#actor-count").textContent = ACTORS.length || ""; renderCastChips(); } catch (e) {}

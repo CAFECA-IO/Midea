@@ -134,7 +134,8 @@
         { label: '首頁', href: '/', icon: 'home', active: path === '/' },
         { label: '直播', href: '/live', icon: 'play', active: path === '/live' },
         { label: '節目表', href: '/schedule', icon: 'calendar', active: path === '/schedule' },
-        { label: '主題', href: '/#topics', icon: 'grid' }] }),
+        { label: '主題', href: '/#topics', icon: 'grid' },
+        { label: '許願', href: '/wishes', icon: 'star', active: path === '/wishes' }] }),
       h(SignIn), h(AskDialog));
   }
 
@@ -237,6 +238,65 @@
     setTimeout(function () { el.remove(); }, 3000);
   }
 
-  window.Site = { askNickname: askNickname, requireWriter: requireWriter, report: report, toast: toast, api: api, useMe: useMe, setMe: setMe, openSignIn: openSignIn, requireLogin: requireLogin, mount: mount,
+  /* ------------------------------------------------------------ immersive (phones): shared by live and watch */
+  function useMobile() {
+    var q = window.matchMedia ? window.matchMedia('(max-width: 639px)') : null;
+    var _m = React.useState(!!(q && q.matches)), m = _m[0], set = _m[1];
+    React.useEffect(function () {
+      if (!q) return;
+      var f = function () { set(q.matches); };
+      if (q.addEventListener) q.addEventListener('change', f); else q.addListener(f);
+      return function () { if (q.removeEventListener) q.removeEventListener('change', f); else q.removeListener(f); };
+    }, []);
+    return m;
+  }
+  function reducedMotion() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  /* the blurred light around the picture: a 32×18 copy of the current frame, scaled up and blurred by CSS */
+  function Ambient(p) {
+    var cref = React.useRef(null);
+    React.useEffect(function () {
+      if (reducedMotion()) return;
+      var id = setInterval(function () {
+        var v = p.video && p.video.current, c = cref.current;
+        if (!v || !c || v.readyState < 2) return;
+        try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); } catch (e) {}
+      }, 700);
+      return function () { clearInterval(id); };
+    }, [p.video]);
+    return h(React.Fragment, null,
+      h('div', { className: 'imv-amb', 'aria-hidden': 'true', style: { backgroundImage: 'url(' + p.image + ')' } }, h('canvas', { ref: cref, width: 32, height: 18 })),
+      h('div', { className: 'imv-shade', 'aria-hidden': 'true' }));
+  }
+  /* interface visibility: tap toggles, 3 s without input hides, `busy` keeps it up; the site shell steps aside */
+  function useImmersive(busy) {
+    var _u = React.useState(false), ui = _u[0], setUi = _u[1];
+    var timer = React.useRef(null), busyRef = React.useRef(busy);
+    busyRef.current = busy;
+    React.useEffect(function () { document.body.classList.add('is-immersive'); return function () { document.body.classList.remove('is-immersive'); clearTimeout(timer.current); }; }, []);
+    function poke() {
+      setUi(true); clearTimeout(timer.current);
+      timer.current = setTimeout(function () { if (!busyRef.current) setUi(false); }, 3000);
+    }
+    function hide() { clearTimeout(timer.current); setUi(false); }
+    React.useEffect(function () { if (busy) clearTimeout(timer.current); else if (ui) poke(); }, [busy]);
+    return { ui: ui, poke: poke, hide: hide, toggle: function () { if (ui) hide(); else poke(); } };
+  }
+  /* tap vs long-press on one element (pointer events; long-press = 500 ms) */
+  // a hook: call it unconditionally during render. The timer lives in a ref so a
+  // re-render mid-press (timeupdate, SSE) doesn't forget that the long press fired.
+  function pressHandlers(onTap, onLong, ms) {
+    var r = React.useRef({ t: null, fired: false, down: false });
+    var cb = React.useRef({}); cb.current = { tap: onTap, long: onLong };
+    return {
+      onPointerDown: function (e) { var s = r.current; s.fired = false; s.down = true; clearTimeout(s.t); s.t = setTimeout(function () { s.fired = true; cb.current.long(e); }, ms || 500); },
+      onPointerUp: function (e) { var s = r.current; clearTimeout(s.t); if (s.down && !s.fired) cb.current.tap(e); s.down = false; },
+      onPointerLeave: function () { var s = r.current; clearTimeout(s.t); s.down = false; },
+      onContextMenu: function (e) { e.preventDefault(); }
+    };
+  }
+  function fmtTime(s) { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
+
+  window.Site = { useMobile: useMobile, reducedMotion: reducedMotion, Ambient: Ambient, useImmersive: useImmersive, pressHandlers: pressHandlers, fmtTime: fmtTime,
+    askNickname: askNickname, requireWriter: requireWriter, report: report, toast: toast, api: api, useMe: useMe, setMe: setMe, openSignIn: openSignIn, requireLogin: requireLogin, mount: mount,
     cast: cast, videoLine: videoLine, viewTracker: viewTracker, share: share, finishLogin: finish };
 })();
