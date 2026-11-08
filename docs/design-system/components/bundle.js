@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Midea","components":[{"name":"Logo"},{"name":"Icon"},{"name":"Button"},{"name":"SignInButton"},{"name":"SearchField"},{"name":"SegmentedTabs"},{"name":"SiteHeader"},{"name":"SiteFooter"},{"name":"Badge"},{"name":"Tag"},{"name":"ProgressBar"},{"name":"SectionHeader"},{"name":"BentoGrid"},{"name":"VideoTile"},{"name":"ThemeTile"},{"name":"RankTile"},{"name":"RankRow"},{"name":"DaySlot"},{"name":"ActorCard"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Midea","components":[{"name":"Logo"},{"name":"Icon"},{"name":"Button"},{"name":"SignInButton"},{"name":"SearchField"},{"name":"SegmentedTabs"},{"name":"SiteHeader"},{"name":"SiteFooter"},{"name":"Badge"},{"name":"Tag"},{"name":"ProgressBar"},{"name":"SectionHeader"},{"name":"BentoGrid"},{"name":"VideoTile"},{"name":"ThemeTile"},{"name":"RankTile"},{"name":"RankRow"},{"name":"DaySlot"},{"name":"ActorCard"},{"name":"InfluenceTag"},{"name":"ViewerCount"},{"name":"ReactionBar"},{"name":"LiveReactions"},{"name":"PollCard"},{"name":"LivePlayer"},{"name":"VideoPlayer"},{"name":"VideoMeta"},{"name":"AIDisclosure"},{"name":"SignInDialog"},{"name":"AccountMenu"},{"name":"Skeleton"},{"name":"EmptyState"},{"name":"TopicBento"},{"name":"BottomNav"}]} */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -119,6 +119,7 @@
       h('img', { src: p.image, alt: p.alt || '', style: { objectPosition: pos } }),
       h('span', { className: 'md-scrim', 'aria-hidden': 'true' }),
       p.badge ? h('span', { className: 'md-vtile-badge' }, p.badge) : null,
+      p.corner ? h('span', { className: 'md-vtile-corner' }, p.corner) : null,
       h('span', { className: 'md-vtile-body' },
         p.eyebrow ? h('span', { className: 'md-vtile-eyebrow' }, p.eyebrow) : null,
         h('span', { className: 'md-vtile-title' }, p.title),
@@ -160,7 +161,8 @@
     return h('a', { href: p.href || '#', className: cx('md-day', p.today && 'is-today'), 'aria-current': p.today ? 'date' : undefined },
       h('span', { className: 'md-day-d' }, p.day),
       h('span', { className: 'md-day-t' }, p.title),
-      h('span', { className: 'md-meta' }, p.time));
+      h('span', { className: 'md-meta' }, p.time),
+      p.tag ? h('span', { className: 'md-day-tag' }, p.tag) : null);
   }
 
   function ActorCard(p) {
@@ -172,8 +174,294 @@
         p.works ? h('span', { className: 'md-actor-works' }, p.works) : null));
   }
 
+
+  /* ---------------------------------------------------------------- v2: playback, sign-in, feedback & interaction */
+  Object.assign(PATHS, {
+    heart: [['path', { d: 'M12 21s-7-4.4-9.3-8.6C1 9 3 5 6.6 5c2 0 3.3 1 5.4 3.1C14.1 6 15.4 5 17.4 5 21 5 23 9 21.3 12.4 19 16.6 12 21 12 21z' }]],
+    sparkle: [['path', { d: 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18' }]],
+    smile: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01' }]],
+    tear: [['circle', { cx: 12, cy: 12, r: 9 }], ['path', { d: 'M8 15s1.5-1.5 4-1.5 4 1.5 4 1.5M9 9h.01M15 9h.01M16 11v2' }]],
+    plus: [['path', { d: 'M12 5v14M5 12h14' }]],
+    x: [['path', { d: 'M6 6l12 12M18 6 6 18' }]],
+    bookmark: [['path', { d: 'M6 3h12v18l-6-4-6 4z' }]],
+    share: [['path', { d: 'M4 12v7h16v-7M12 3v12M7 8l5-5 5 5' }]],
+    eye: [['path', { d: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z' }], ['circle', { cx: 12, cy: 12, r: 3 }]],
+    people: [['circle', { cx: 9, cy: 8, r: 3.5 }], ['path', { d: 'M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18.5 14.8c1.6.7 2.6 2.4 3 5.2' }]],
+    sound: [['path', { d: 'M11 5 6 9H2v6h4l5 4z' }], ['path', { d: 'M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13' }]],
+    expand: [['path', { d: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5' }]],
+    home: [['path', { d: 'M3 11 12 4l9 7M5 10v10h14V10' }]],
+    calendar: [['rect', { x: 3, y: 5, width: 18, height: 16, rx: 2 }], ['path', { d: 'M3 10h18M8 3v4M16 3v4' }]],
+    grid: [['rect', { x: 4, y: 4, width: 7, height: 7, rx: 1.5 }], ['rect', { x: 13, y: 4, width: 7, height: 7, rx: 1.5 }], ['rect', { x: 4, y: 13, width: 7, height: 7, rx: 1.5 }], ['rect', { x: 13, y: 13, width: 7, height: 7, rx: 1.5 }]],
+    user: [['circle', { cx: 12, cy: 8, r: 4 }], ['path', { d: 'M4 21c1-4 4-6 8-6s7 2 8 6' }]],
+    check: [['path', { d: 'm5 12 5 5 9-10' }]]
+  });
+
+  function reduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+
+  /* InfluenceTag — where the audience changed something: 「觀眾投票選出」「觀眾想再看」… */
+  function InfluenceTag(p) {
+    return h('span', { className: 'md-tag md-tag-influence' }, h(Icon, { name: 'people', size: 13 }), p.children);
+  }
+
+  /* ViewerCount — 「N 人正在看」; renders nothing below the threshold (default 10) */
+  function ViewerCount(p) {
+    var min = p.min == null ? 10 : p.min;
+    if (p.count == null || p.count < min) return null;
+    return h('span', { className: cx('md-viewers', p.onImage && 'on-image'), 'aria-live': 'off' }, h(Icon, { name: 'eye', size: 14 }),
+      typeof p.label === 'function' ? p.label(p.count) : (p.label || p.count));
+  }
+
+  /* ReactionBar — after a video: like / want more / not interested (+ optional, skippable reason) */
+  function ReactionBar(p) {
+    var opts = p.options || [];
+    var _r = React.useState(false), asking = _r[0], setAsking = _r[1];
+    var cur = p.value || null;
+    function pick(o) {
+      var next = cur === o.value ? null : o.value;
+      setAsking(!!(next && o.askReason && p.reasons && p.reasons.length));
+      if (p.onChange) p.onChange(next, null);
+    }
+    return h('div', { className: cx('md-reactbar', p.compact && 'is-compact'), role: 'group', 'aria-label': p.label || p.title },
+      p.title ? h('span', { className: 'md-reactbar-title' }, p.title) : null,
+      h('div', { className: 'md-reactbar-opts' }, opts.map(function (o) {
+        var on = cur === o.value;
+        return h('button', { key: o.value, type: 'button', className: cx('md-chip', on && 'is-on'), 'aria-pressed': on ? 'true' : 'false',
+          onClick: function () { pick(o); } }, o.icon ? h(Icon, { name: o.icon, size: 16 }) : null, o.label);
+      })),
+      asking ? h('div', { className: 'md-reactbar-reasons', role: 'group', 'aria-label': p.reasonPrompt },
+        h('span', { className: 'md-meta' }, p.reasonPrompt),
+        p.reasons.map(function (r) {
+          return h('button', { key: r.value, type: 'button', className: 'md-chip md-chip-sm', onClick: function () { setAsking(false); if (p.onChange) p.onChange(cur, r.value); } }, r.label);
+        }),
+        p.skipLabel ? h('button', { type: 'button', className: 'md-linkbtn', onClick: function () { setAsking(false); } }, p.skipLabel) : null) : null,
+      p.note ? h('span', { className: 'md-meta md-reactbar-note' }, p.note) : null);
+  }
+
+  /* LiveReactions — fixed reactions on the live picture, floating icons for ~2 s, can be hidden.
+     `burst` = {kind: n} from the latest tick (already capped at 20 per second by the server). */
+  function LiveReactions(p) {
+    var opts = p.options || [];
+    var _f = React.useState([]), floats = _f[0], setFloats = _f[1];
+    var _c = React.useState(false), cool = _c[0], setCool = _c[1];
+    var seq = React.useRef(0);
+    var icons = {}; opts.forEach(function (o) { icons[o.value] = o.icon; });
+    function spawn(map, mine) {
+      if (p.hidden || reduced() || !map) return;
+      var add = [];
+      Object.keys(map).forEach(function (k) {
+        for (var i = 0; i < Math.min(map[k], 20); i++) add.push({ id: ++seq.current, icon: icons[k] || 'heart', x: Math.round(Math.random() * 70), d: Math.round(Math.random() * 400), mine: mine });
+      });
+      if (!add.length) return;
+      setFloats(function (f) { return f.concat(add).slice(-40); });
+      var ids = add.map(function (a) { return a.id; });
+      setTimeout(function () { setFloats(function (f) { return f.filter(function (x) { return ids.indexOf(x.id) < 0; }); }); }, 2600);
+    }
+    React.useEffect(function () { spawn(p.burst, false); }, [p.burst]);
+    function press(o) {
+      if (cool) return;
+      setCool(true); setTimeout(function () { setCool(false); }, p.cooldownMs || 2000);
+      spawn((function () { var m = {}; m[o.value] = 1; return m; })(), true);
+      if (p.onReact) p.onReact(o.value);
+    }
+    return h('div', { className: 'md-lreact' },
+      h('div', { className: 'md-lreact-floats', 'aria-hidden': 'true' }, p.hidden ? null : floats.map(function (f) {
+        return h('span', { key: f.id, className: cx('md-float', f.mine && 'is-mine'), style: { left: f.x + 'px', animationDelay: f.d + 'ms' } }, h(Icon, { name: f.icon, size: 22 }));
+      })),
+      h('div', { className: 'md-lreact-bar' },
+        h('div', { className: 'md-lreact-btns', role: 'group', 'aria-label': p.label }, opts.map(function (o) {
+          return h('button', { key: o.value, type: 'button', className: 'md-lreact-btn', 'aria-label': o.label, title: o.label, disabled: cool,
+            onClick: function () { press(o); } }, h(Icon, { name: o.icon, size: 20 }));
+        })),
+        p.toggleLabel ? h('button', { type: 'button', className: 'md-lreact-toggle', 'aria-pressed': p.hidden ? 'true' : 'false', onClick: p.onToggleHidden }, p.toggleLabel) : null));
+  }
+
+  /* PollCard — the 「觀眾決定」 vote. variant "tile" (amber Bento tile), "full" (page), "overlay" (end-of-slot 想／不想) */
+  function PollCard(p) {
+    var variant = p.variant || 'tile';
+    var opts = p.options || [];
+    var _s = React.useState(null), picked = _s[0], setPicked = _s[1];
+    var voted = p.value != null;
+    var sel = voted ? p.value : picked;
+    var showResults = voted || p.closed;
+    if (variant === 'overlay') {
+      return h('div', { className: 'md-poll md-poll-overlay', role: 'group', 'aria-label': p.title },
+        p.eyebrow ? h('span', { className: 'md-poll-eyebrow' }, p.eyebrow) : null,
+        h('span', { className: 'md-poll-title' }, p.title),
+        h('div', { className: 'md-poll-pair' }, opts.map(function (o, i) {
+          var on = voted && p.value === o.id;
+          return h('button', { key: o.id, type: 'button', className: cx('md-btn', i === 0 ? 'md-btn-primary' : 'md-btn-ghost', on && 'is-on'),
+            'aria-pressed': on ? 'true' : 'false', onClick: function () { if (p.onVote) p.onVote(o.id); } }, on ? h(Icon, { name: 'check', size: 16 }) : null, o.title);
+        })),
+        p.note ? h('span', { className: 'md-meta' }, p.note) : null);
+    }
+    return h('div', { className: cx('md-poll', 'md-poll-' + variant, variant === 'tile' && 'md-tile', span(p.cols, p.rows)), role: 'group', 'aria-label': p.title },
+      p.eyebrow ? h('span', { className: 'md-poll-eyebrow' }, p.eyebrow) : null,
+      h('span', { className: 'md-poll-title' }, p.title),
+      h('div', { className: 'md-poll-opts', role: 'radiogroup', 'aria-label': p.optionsLabel || p.title }, opts.map(function (o) {
+        var on = sel === o.id;
+        var win = p.closed && p.winner === o.id;
+        return h('button', { key: o.id, type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false', disabled: voted && !p.allowChange || p.closed,
+          className: cx('md-poll-opt', on && 'is-on', win && 'is-win'), onClick: function () { setPicked(o.id); if (voted && p.allowChange && p.onVote) p.onVote(o.id); } },
+          showResults ? h('span', { className: 'md-poll-bar', style: { width: (o.share || 0) + '%' }, 'aria-hidden': 'true' }) : null,
+          o.images && o.images.length ? h('span', { className: 'md-poll-thumbs' }, o.images.slice(0, variant === 'full' ? 3 : 1).map(function (src, i) { return h('img', { key: i, src: src, alt: '' }); })) : null,
+          h('span', { className: 'md-poll-opt-body' },
+            h('span', { className: 'md-poll-opt-title' }, o.title),
+            h('span', { className: 'md-poll-opt-sub' }, [o.sub, showResults && o.share != null ? o.share + '%' : null].filter(Boolean).join(' · '))));
+      })),
+      p.closed || voted ? null : h('button', { type: 'button', className: 'md-poll-submit', disabled: !picked, onClick: function () { if (picked && p.onVote) p.onVote(picked); } }, p.cta),
+      p.note ? h('span', { className: 'md-poll-note' }, p.note) : null);
+  }
+
+  /* LivePlayer — official channel: starts at the schedule position, cannot seek; overlays go in children */
+  function LivePlayer(p) {
+    var ref = React.useRef(null);
+    var _m = React.useState(p.muted !== false), muted = _m[0], setMuted = _m[1];
+    React.useEffect(function () {
+      var v = ref.current; if (!v) return;
+      var off = p.offset || 0;
+      function seek() { try { if (Math.abs(v.currentTime - off) > 1.5) v.currentTime = off; } catch (e) {} var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); }
+      if (v.readyState >= 1) seek(); else v.addEventListener('loadedmetadata', seek, { once: true });
+    }, [p.src, p.offset]);
+    function full() { var el = ref.current && ref.current.parentNode; if (el && el.requestFullscreen) el.requestFullscreen(); }
+    return h('div', { className: cx('md-player', 'md-player-live', p.className) },
+      h('video', { ref: ref, src: p.src, poster: p.poster, muted: muted, playsInline: true, autoPlay: true, preload: 'auto',
+        onEnded: p.onEnded, onTimeUpdate: p.onTime ? function (e) { p.onTime(e.target.currentTime); } : undefined, 'aria-label': p.label }),
+      h('span', { className: 'md-scrim md-player-scrim', 'aria-hidden': 'true' }),
+      p.badge ? h('span', { className: 'md-player-tl' }, p.badge) : null,
+      p.topRight ? h('span', { className: 'md-player-tr' }, p.topRight) : null,
+      h('div', { className: 'md-player-ctl' },
+        h('button', { type: 'button', className: 'md-iconbtn', 'aria-label': muted ? p.unmuteLabel : p.muteLabel, onClick: function () { setMuted(!muted); } }, h(Icon, { name: muted ? 'sound-off' : 'sound', size: 18 })),
+        h('button', { type: 'button', className: 'md-iconbtn', 'aria-label': p.fullscreenLabel, onClick: full }, h(Icon, { name: 'expand', size: 18 }))),
+      p.children);
+  }
+
+  /* VideoPlayer — on-demand video with captions; highlight markers come from live reaction peaks */
+  function VideoPlayer(p) {
+    var ref = React.useRef(null);
+    var _t = React.useState({ t: 0, d: p.duration || 0 }), tm = _t[0], setTm = _t[1];
+    var maxT = React.useRef(0);
+    React.useEffect(function () { maxT.current = 0; }, [p.src]);
+    function onTime(e) {
+      var v = e.target; maxT.current = Math.max(maxT.current, v.currentTime);
+      setTm({ t: v.currentTime, d: v.duration || p.duration || 0 });
+      if (p.onProgress) p.onProgress(maxT.current, v.duration || 0, false);
+    }
+    var d = tm.d || 1;
+    return h('div', { className: 'md-vplayer' },
+      h('div', { className: cx('md-player', p.vertical && 'is-vertical') },
+        h('video', { ref: ref, src: p.src, poster: p.poster, controls: true, playsInline: true, autoPlay: p.autoPlay, preload: 'metadata', crossOrigin: 'anonymous',
+          onTimeUpdate: onTime, onEnded: function (e) { if (p.onProgress) p.onProgress(e.target.duration, e.target.duration, true); if (p.onEnded) p.onEnded(); }, 'aria-label': p.label },
+          p.captions ? h('track', { kind: 'subtitles', src: p.captions, srcLang: p.captionsLang || 'zh-Hant', label: p.captionsLabel || '字幕', default: true }) : null)),
+      p.highlights && p.highlights.length ? h('div', { className: 'md-hl' },
+        h('div', { className: 'md-hl-track' },
+          h('span', { className: 'md-hl-fill', style: { width: Math.min(100, 100 * tm.t / d) + '%' } }),
+          p.highlights.map(function (x, i) {
+            return h('button', { key: i, type: 'button', className: 'md-hl-mark', style: { left: Math.min(100, 100 * ((x.start + x.end) / 2) / d) + '%' }, title: x.label, 'aria-label': x.label + ' ' + fmt(x.start),
+              onClick: function () { if (ref.current) { ref.current.currentTime = x.start; ref.current.play(); } } });
+          })),
+        h('span', { className: 'md-meta' }, p.highlightsLabel)) : null);
+  }
+  function fmt(s) { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
+
+  /* VideoMeta / AIDisclosure */
+  function VideoMeta(p) {
+    return h('div', { className: 'md-vmeta' },
+      p.eyebrow ? h('span', { className: 'md-vmeta-eyebrow' }, p.eyebrow) : null,
+      h(p.as || 'h1', { className: 'md-vmeta-title' }, p.title),
+      p.meta ? h('span', { className: 'md-vmeta-line' }, p.meta) : null,
+      p.tags && p.tags.length ? h('div', { className: 'md-vmeta-tags' }, p.tags) : null,
+      p.actions ? h('div', { className: 'md-vmeta-actions' }, p.actions) : null);
+  }
+  function AIDisclosure(p) {
+    return h('p', { className: 'md-aidisc' }, h(Icon, { name: 'sparkle', size: 14 }), h('span', null, p.children));
+  }
+
+  /* SignInDialog — CAFECA: popup (desktop), redirect (mobile / in-app browsers), QR (another device) */
+  function SignInDialog(p) {
+    var ref = React.useRef(null);
+    React.useEffect(function () {
+      var d = ref.current; if (!d) return;
+      if (p.open && !d.open) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); }
+      if (!p.open && d.open) d.close();
+    }, [p.open]);
+    return h('dialog', { ref: ref, className: 'md-dialog', 'aria-labelledby': 'md-signin-t', onClose: p.onClose, onCancel: p.onClose },
+      h('div', { className: 'md-dialog-head' },
+        h('h2', { id: 'md-signin-t', className: 'md-dialog-title' }, p.title),
+        h('button', { type: 'button', className: 'md-iconbtn', 'aria-label': p.closeLabel, onClick: p.onClose }, h(Icon, { name: 'x', size: 18 }))),
+      p.body ? h('p', { className: 'md-dialog-body' }, p.body) : null,
+      h('div', { className: 'md-dialog-actions' },
+        h(SignInButton, { onClick: p.onPopup }, p.popupLabel),
+        p.redirectLabel ? h(Button, { variant: 'ghost', onClick: p.onRedirect }, p.redirectLabel) : null),
+      p.qr ? h('div', { className: 'md-dialog-qr' }, h('div', { className: 'md-dialog-qrbox' }, p.qr), p.qrLabel ? h('span', { className: 'md-meta' }, p.qrLabel) : null) : null,
+      p.error ? h('p', { className: 'md-dialog-error', role: 'alert' }, p.error) : null,
+      p.footer ? h('p', { className: 'md-meta' }, p.footer) : null);
+  }
+
+  /* AccountMenu — signed-in avatar menu */
+  function AccountMenu(p) {
+    var _o = React.useState(false), open = _o[0], setOpen = _o[1];
+    var root = React.useRef(null);
+    React.useEffect(function () {
+      if (!open) return;
+      function off(e) { if (root.current && !root.current.contains(e.target)) setOpen(false); }
+      function esc(e) { if (e.key === 'Escape') setOpen(false); }
+      document.addEventListener('mousedown', off); document.addEventListener('keydown', esc);
+      return function () { document.removeEventListener('mousedown', off); document.removeEventListener('keydown', esc); };
+    }, [open]);
+    return h('div', { className: 'md-acct', ref: root },
+      h('button', { type: 'button', className: 'md-acct-btn', 'aria-haspopup': 'menu', 'aria-expanded': open ? 'true' : 'false', onClick: function () { setOpen(!open); } },
+        h('span', { className: 'md-avatar', 'aria-hidden': 'true' }, (p.name || '?').slice(0, 1).toUpperCase()), h('span', { className: 'md-acct-name' }, p.name)),
+      open ? h('div', { className: 'md-acct-menu', role: 'menu' },
+        p.sub ? h('span', { className: 'md-meta md-acct-sub' }, p.sub) : null,
+        (p.items || []).map(function (it, i) {
+          return it.href ? h('a', { key: i, role: 'menuitem', href: it.href, className: 'md-acct-item' }, it.label)
+            : h('button', { key: i, type: 'button', role: 'menuitem', className: 'md-acct-item', onClick: function () { setOpen(false); if (it.onClick) it.onClick(); } }, it.label);
+        })) : null);
+  }
+
+  /* Skeleton / EmptyState */
+  function Skeleton(p) {
+    return h('span', { className: cx('md-skel', span(p.cols, p.rows)), style: p.height ? { height: p.height } : null, 'aria-hidden': 'true' });
+  }
+  function EmptyState(p) {
+    return h('div', { className: cx('md-empty', span(p.cols, p.rows)) },
+      h('span', { className: 'md-empty-title' }, p.title),
+      p.body ? h('span', { className: 'md-meta' }, p.body) : null,
+      p.action || null);
+  }
+
+  /* TopicBento — one topic: lead tile 2×2 + up to four 1×1 */
+  function TopicBento(p) {
+    var vs = p.videos || [];
+    return h('section', { className: 'md-topic', 'aria-labelledby': p.id },
+      h(SectionHeader, { title: p.title, tag: p.tagNode ? null : p.tag, meta: p.meta, id: p.id, level: p.level || 3 }),
+      p.tagNode ? h('div', { className: 'md-topic-tag' }, p.tagNode) : null,
+      h(BentoGrid, { row: 'topic' }, vs.slice(0, 5).map(function (v, i) {
+        // lead 2×2; the other 2×2 quarter is filled exactly: 1 → 2×2, 2 → 1×2 each, 3 → 1×1 + 1×1 + 2×1, 4 → 1×1 each
+        var n = Math.min(vs.length, 5) - 1;
+        var c = 1, r = 1;
+        if (i === 0) { c = 2; r = 2; }
+        else if (n === 1) { c = 2; r = 2; }
+        else if (n === 2) { r = 2; }
+        else if (n === 3 && i === 3) { c = 2; }
+        return h(VideoTile, { key: v.href || i, image: v.image, alt: v.alt, title: v.title, subtitle: v.subtitle, href: v.href, focus: v.focus,
+          size: i === 0 ? 'md' : 'sm', cols: c, rows: r });
+      })));
+  }
+
+  /* BottomNav — phones: 首頁、節目表、主題、我的 */
+  function BottomNav(p) {
+    return h('nav', { className: 'md-bnav', 'aria-label': p.label || '主選單' }, (p.items || []).map(function (it, i) {
+      return h('a', { key: i, href: it.href, className: cx('md-bnav-a', it.active && 'is-on'), 'aria-current': it.active ? 'page' : undefined },
+        h(Icon, { name: it.icon, size: 20 }), h('span', null, it.label));
+    }));
+  }
+
   var api = { Logo: Logo, Icon: Icon, Button: Button, SignInButton: SignInButton, SearchField: SearchField, SegmentedTabs: SegmentedTabs,
     SiteHeader: SiteHeader, SiteFooter: SiteFooter, Badge: Badge, Tag: Tag, ProgressBar: ProgressBar, SectionHeader: SectionHeader,
-    BentoGrid: BentoGrid, VideoTile: VideoTile, ThemeTile: ThemeTile, RankTile: RankTile, RankRow: RankRow, DaySlot: DaySlot, ActorCard: ActorCard };
+    BentoGrid: BentoGrid, VideoTile: VideoTile, ThemeTile: ThemeTile, RankTile: RankTile, RankRow: RankRow, DaySlot: DaySlot, ActorCard: ActorCard,
+    InfluenceTag: InfluenceTag, ViewerCount: ViewerCount, ReactionBar: ReactionBar, LiveReactions: LiveReactions, PollCard: PollCard,
+    LivePlayer: LivePlayer, VideoPlayer: VideoPlayer, VideoMeta: VideoMeta, AIDisclosure: AIDisclosure, SignInDialog: SignInDialog,
+    AccountMenu: AccountMenu, Skeleton: Skeleton, EmptyState: EmptyState, TopicBento: TopicBento, BottomNav: BottomNav };
   window.Midea = Object.assign(window.Midea || {}, api);
 })();

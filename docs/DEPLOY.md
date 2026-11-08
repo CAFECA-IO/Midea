@@ -22,6 +22,7 @@ Midea 部署在 `borg@211.22.118.147:/workspace/midea`。所有東西（程式�
 | 服務 | Port | 備註 |
 |---|---|---|
 | 看板 | 10030 | 對外開放（0.0.0.0），需登入：帳密在 `app/.env` 的 `MIDEA_BOARD_USER`／`MIDEA_BOARD_PASSWORD` |
+| 公開網站 `midea site` | 10031 | tmux `midea-site`；給 midea.cafeca.io 的 HTTPS 反向代理使用（CAFECA 登入只在該網域有效） |
 | Qwen3.8-Flash-Next | **8080（Strata，外部）** | 由 root 的 Strata 提供，Midea 只連線，不負責啟停 |
 | ComfyUI + MiniMax H3 | 8781 | 獨佔 GPU |
 | VoxCPM2 | 8782 | |
@@ -202,3 +203,11 @@ Strata 用 `strata-iq3_s-local.json` 啟動時，會把專家快取塞滿 GPU，
 - **字卡**：置中、細字、寬字距、慢淡入淡出。
 - **片尾**：極簡字標卡（品牌、slogan、網址），3–4 秒。
 - **QA**：商品出現比例門檻降為 25%（刻意晚出場）。
+
+## 公開網站（midea.cafeca.io，2026-11-08）
+
+- 啟動：`tmux new -d -s midea-site 'cd /workspace/midea/app && ../venv/bin/python -m midea site --host 0.0.0.0 --port 10031'`（`app/run_site.sh`）。
+- 反向代理：把 `https://midea.cafeca.io` 轉到 `http://<伺服器>:10031`，要轉 `X-Forwarded-For` 並關掉 `/api/public/v1/live/stream` 的緩衝（SSE）。
+- 設定：`config.yaml` 的 `site:`；`MIDEA_SITE_ORIGIN` 必須和瀏覽器網址完全相同（含 https），否則 CAFECA 登入會被拒絕。
+- 資料：`projects/_site/`（`site.db`、`schedule/`、`topics.json`）。立即重排：`../venv/bin/python -m midea site plan-week`。
+- 本機測試可設 `MIDEA_SITE_DEV_LOGIN=1` 開啟假的登入（`POST /api/public/v1/auth/dev`）；正式環境不要開。

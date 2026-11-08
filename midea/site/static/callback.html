@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登入中 · Midea</title>
+<link rel="stylesheet" href="/ds/tokens.css">
+<link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+<main class="callback"><p id="msg">正在完成 CAFECA 登入…</p><p><a href="/">回到首頁</a></p></main>
+<script>
+(function () {
+  var msg = document.getElementById('msg');
+  function back() { var to = '/'; try { to = sessionStorage.getItem('midea_return') || '/'; sessionStorage.removeItem('midea_return'); } catch (e) {} if (!/^\/(?!\/)/.test(to)) to = '/'; location.replace(to); }
+  fetch('/api/public/v1/auth/nonce', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (n) {
+    var s = document.createElement('script');
+    s.src = n.wallet + '/sdk/cafeca-connect.js';
+    s.onload = function () {
+      var got = window.CafecaConnect.create({ wallet: n.wallet }).handleRedirect();
+      if (!got || got.error) { msg.textContent = got && got.error === 'access_denied' ? '你取消了登入。' : '沒有收到登入結果，請再試一次。'; return; }
+      fetch('/api/public/v1/auth/cafeca', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Midea': '1' }, body: JSON.stringify(got.response) })
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.detail || '登入失敗'); }); })
+        .then(back).catch(function (e) { msg.textContent = '登入失敗：' + e.message; });
+    };
+    s.onerror = function () { msg.textContent = '無法連到 CAFECA，請稍後再試。'; };
+    document.head.appendChild(s);
+  });
+})();
+</script>
+</body>
+</html>

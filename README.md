@@ -254,6 +254,16 @@ python -m midea services status                          # 查看 VRAM 配置
 
 網站與介面的設計語言、token 與元件放在 [docs/design-system/](docs/design-system/README.md)。規劃或開發頁面時先讀它；規則寫在 [CLAUDE.md](CLAUDE.md)。
 
+## 公開網站 midea.cafeca.io（`midea site`）
+
+觀眾端的網站與分鏡看板分開跑：`midea site`（預設 127.0.0.1:10031，前面接 HTTPS 反向代理）。它只讀取已發佈的專案（`final/` 裡的成片與縮圖）和已通過驗收的演員自我介紹，不碰製作流程。
+
+- **頁面**：首頁（A3 拼貼）、直播 `/live`、影片 `/watch/{id}`、節目表 `/schedule`，全部用 `docs/design-system/` 的 token 與元件。
+- **官方頻道**：每週一 09:00 排好下一週（每天 48 個 30 分鐘時段，20:00–24:00 是主打）；週六 21:30 是「觀眾決定」時段，週一到週四投票。主題每 6 小時重新歸納；最多人看只算完整看完的次數，每小時更新。
+- **觀眾互動（第一期）**：影片反應（喜歡／想看更多這類／不感興趣，免登入）、收藏、分享、直播即時反應與「N 人正在看」、時段結束的「下週還想看嗎」、觀眾決定投票。反應、投票與時段投票直接影響主題、推薦與下週排程，畫面上用固定寫法標出原因（「觀眾投票選出」「觀眾想再看」「觀眾最有反應的片段」）。直播反應的峰值會寫進專案的 `audience/highlights.json`，供剪 15 秒版參考。
+- **登入**：只用 CAFECA（通行金鑰，免密碼）。後端自己驗 EIP-712 簽章（ERC-1271 `isValidSignature`），帳戶地址是觀眾的 id；投票不要求 KYC 等級，但結果依等級分開統計。登入只能在設定的網域（`site.origin`）上完成。
+- **資料**：SQLite（`<workspace>/_site/site.db`）、節目表與主題 JSON；API 在 `/api/public/v1`。完整規劃見專案文件「觀眾反饋與互動功能規劃」。
+
 ## 伺服器部署
 
 共用 GPU 伺服器（cafeca-aich-001）的部署方式、port 配置、接 Strata Qwen 端點與 GPU 共用策略見 [docs/DEPLOY.md](docs/DEPLOY.md)；一鍵安裝模型堆疊：`MIDEA_STACK=/workspace/midea bash scripts/deploy_server.sh`。
@@ -281,6 +291,8 @@ midea/
   actors.py  vision_check.py         虛擬演員（設定、定妝照、三視圖、聲音、說話影片）與姿態驗收
   qa.py  cost.py  project.py         自我審核、成本模型、專案儲存／事件／關卡決定
   web/                               FastAPI + SSE 分鏡看板（HTTP Basic 登入）
+  site/                              公開網站：catalog（已發佈作品）programming（節目表、主題、排行、投票）
+                                     live（即時反應、同時在看）cafeca（登入驗簽）store（SQLite）static（頁面）
 pipeline_defs/*.yaml                 13 條管線定義（階段、關卡、風格預設）
 workflows/                           MiniMax H3 ComfyUI API workflow（自行匯出）
 scripts/gen_readme_diagrams.py       產生本文件的 SVG 圖（docs/images/）

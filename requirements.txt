@@ -11,3 +11,4 @@ soundfile>=0.12
 json-repair>=0.30
 opencc-python-reimplemented>=0.1.7   # zh-TW ↔ zh-CN matching for subtitle alignment
 pypinyin                       # 說話影片驗收：中文以讀音比對（同音字不算錯）
+pycryptodome>=3.20        # CAFECA 登入：EIP-712 / keccak-256 驗簽

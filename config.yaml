@@ -203,3 +203,16 @@ render:
 server:
   host: 127.0.0.1
   port: 7788
+
+# ---- 公開網站 midea.cafeca.io（midea site）--------------------------------------
+site:
+  host: 127.0.0.1                  # 由 HTTPS 反向代理轉到這裡；CAFECA 登入只接受與 origin 完全相同的網域
+  port: ${MIDEA_SITE_PORT:-10031}
+  origin: ${MIDEA_SITE_ORIGIN:-https://midea.cafeca.io}
+  data_dir: ${MIDEA_SITE_DATA:-}   # 空白 = <workspace>/_site（site.db、節目表、主題）
+  catalog_ttl_s: 120
+  ai_titles: false                 # true = 每週排程時請 Qwen 為主打時段命名（失敗時沿用規則產生的名稱）
+  rerun_min_votes: 3               # 時段結束投票至少幾票才算「觀眾想再看」
+  highlight_min: 5                 # 一個 5 秒區間至少幾個即時反應才標成精華
+  cafeca:
+    wallet: https://cafeca.io      # 其餘（chain、rpc、合約）讀 /.well-known/cafeca-configuration

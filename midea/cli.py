@@ -4,6 +4,8 @@
   midea make "二戰後的台北" --real-only --duration 90   # 只用真實素材
   midea make "咖啡沖煮技巧" --ref https://youtube.com/shorts/xxxx
   midea serve                                          # 開啟分鏡看板 http://127.0.0.1:7788
+  midea site                                           # 公開網站 midea.cafeca.io（http://127.0.0.1:10031）
+  midea site plan-week                                 # 立即重排本週與下週節目表、重新歸納主題
   midea approve <project> scene_plan [--reject --note "..."]
   midea services status | up qwen | down h3
   midea tools | pipelines | doctor | qa video.mp4
@@ -56,6 +58,27 @@ def cmd_serve(a: argparse.Namespace) -> None:
         raise SystemExit(f"refusing to serve on {host} without a login: set MIDEA_BOARD_PASSWORD (and MIDEA_BOARD_USER) in app/.env")
     uvicorn.run(app, host=host,
                 port=a.port or int(settings().get("server.port", 7788)), log_level="warning")
+
+
+def cmd_site(a: argparse.Namespace) -> None:
+    if a.action == "plan-week":
+        from datetime import timedelta
+        from .site.app import st
+        from .site.programming import now_local, week_start
+        s = st()
+        s.cat.refresh(force=True)
+        s.prog.regroup()
+        mon = week_start(now_local().date())
+        s.prog.plan_week(mon, with_poll=False)
+        if now_local().weekday() > 0 or now_local().hour >= 9:
+            s.prog.plan_week(mon + timedelta(days=7))
+        print("排好了：", mon, "與下一週")
+        return
+    import uvicorn
+    from .config import settings
+    from .site.app import app
+    uvicorn.run(app, host=a.host or settings().get("site.host", "127.0.0.1"),
+                port=a.port or int(settings().get("site.port", 10031)), log_level="warning", proxy_headers=True)
 
 
 def cmd_approve(a: argparse.Namespace) -> None:
@@ -195,6 +218,8 @@ def main(argv: list[str] | None = None) -> None:
     m.add_argument("-y", "--yes", action="store_true", help="auto-approve all gates")
     m.set_defaults(fn=cmd_make)
     s = sp.add_parser("serve"); s.add_argument("--host"); s.add_argument("--port", type=int); s.set_defaults(fn=cmd_serve)
+    w = sp.add_parser("site", help="public site midea.cafeca.io"); w.add_argument("action", nargs="?", default="serve", choices=["serve", "plan-week"])
+    w.add_argument("--host"); w.add_argument("--port", type=int); w.set_defaults(fn=cmd_site)
     g = sp.add_parser("approve"); g.add_argument("project"); g.add_argument("gate")
     g.add_argument("--reject", action="store_true"); g.add_argument("--note"); g.set_defaults(fn=cmd_approve)
     v = sp.add_parser("services"); v.add_argument("action", choices=["status", "up", "down"]); v.add_argument("name", nargs="?")

@@ -1,6 +1,8 @@
 import type * as React from 'react';
 
-export type IconName = 'search' | 'play' | 'key' | 'sound-off' | 'arrow-right' | 'chevron-right';
+export type IconName = 'search' | 'play' | 'key' | 'sound-off' | 'arrow-right' | 'chevron-right'
+  | 'heart' | 'sparkle' | 'smile' | 'tear' | 'plus' | 'x' | 'bookmark' | 'share' | 'eye' | 'people' | 'sound' | 'expand'
+  | 'home' | 'calendar' | 'grid' | 'user' | 'check';
 export type Move = 'new' | 'up' | 'down' | 'same';
 
 export interface LogoProps { size?: number; mark?: boolean; href?: string }
@@ -37,14 +39,14 @@ export declare function Tag(props: TagProps): React.ReactElement;
 export interface ProgressBarProps { value: number; label?: string }
 export declare function ProgressBar(props: ProgressBarProps): React.ReactElement;
 
-export interface SectionHeaderProps { title: string; tag?: string; meta?: string; action?: React.ReactNode; level?: 2 | 3; id?: string }
+export interface SectionHeaderProps { title: string; tag?: string; meta?: string; action?: React.ReactNode; level?: 1 | 2 | 3; id?: string }
 export declare function SectionHeader(props: SectionHeaderProps): React.ReactElement;
 
 export interface BentoGridProps { row?: 'hero' | 'rank' | 'topic'; children: React.ReactNode }
 export declare function BentoGrid(props: BentoGridProps): React.ReactElement;
 
 export interface VideoTileProps { image: string; alt?: string; title: string; subtitle?: string; eyebrow?: string; badge?: React.ReactNode;
-  action?: React.ReactNode; size?: 'hero' | 'md' | 'sm'; cols?: 1 | 2 | 3 | 4; rows?: 1 | 2; focus?: 'top' | string; href?: string }
+  action?: React.ReactNode; corner?: React.ReactNode; size?: 'hero' | 'md' | 'sm'; cols?: 1 | 2 | 3 | 4; rows?: 1 | 2; focus?: 'top' | string; href?: string }
 export declare function VideoTile(props: VideoTileProps): React.ReactElement;
 
 export interface ThemeTileProps { eyebrow: string; title: string; note?: string; cols?: 1 | 2; rows?: 1 | 2; href?: string }
@@ -56,14 +58,77 @@ export declare function RankTile(props: RankTileProps): React.ReactElement;
 export interface RankRowProps { rank: number | string; image: string; title: string; move?: Move; focus?: 'top'; href?: string }
 export declare function RankRow(props: RankRowProps): React.ReactElement;
 
-export interface DaySlotProps { day: string; title: string; time: string; today?: boolean; href?: string }
+export interface DaySlotProps { day: string; title: string; time: string; today?: boolean; href?: string; tag?: React.ReactNode }
 export declare function DaySlot(props: DaySlotProps): React.ReactElement;
 
 export interface ActorCardProps { image: string; name: string; handle: string; role?: string; works?: string; href?: string }
 export declare function ActorCard(props: ActorCardProps): React.ReactElement;
 
+/* ---- v2: playback, sign-in, feedback & interaction ---- */
+export interface InfluenceTagProps { children: React.ReactNode }
+export declare function InfluenceTag(props: InfluenceTagProps): React.ReactElement;
+
+export interface ViewerCountProps { count: number | null; label?: string | ((n: number) => string); min?: number; onImage?: boolean }
+export declare function ViewerCount(props: ViewerCountProps): React.ReactElement | null;
+
+export interface ReactionOption { value: string; label: string; icon?: IconName; askReason?: boolean }
+export interface ReactionBarProps { options: ReactionOption[]; value?: string | null; onChange?: (value: string | null, reason: string | null) => void;
+  title?: string; label?: string; note?: string; reasons?: { value: string; label: string }[]; reasonPrompt?: string; skipLabel?: string; compact?: boolean }
+export declare function ReactionBar(props: ReactionBarProps): React.ReactElement;
+
+export interface LiveReactionsProps { options: { value: string; label: string; icon: IconName }[]; onReact?: (value: string) => void;
+  burst?: Record<string, number>; hidden?: boolean; onToggleHidden?: () => void; toggleLabel?: string; label?: string; cooldownMs?: number }
+export declare function LiveReactions(props: LiveReactionsProps): React.ReactElement;
+
+export interface PollOption { id: string; title: string; sub?: string; images?: string[]; share?: number | null }
+export interface PollCardProps { variant?: 'tile' | 'full' | 'overlay'; eyebrow?: string; title: string; options: PollOption[]; value?: string | null;
+  onVote?: (id: string) => void; cta?: string; note?: string; closed?: boolean; winner?: string | null; allowChange?: boolean;
+  optionsLabel?: string; cols?: 1 | 2; rows?: 1 | 2 }
+export declare function PollCard(props: PollCardProps): React.ReactElement;
+
+export interface LivePlayerProps { src: string; poster?: string; offset?: number; muted?: boolean; onEnded?: () => void; onTime?: (t: number) => void;
+  badge?: React.ReactNode; topRight?: React.ReactNode; label?: string; unmuteLabel?: string; muteLabel?: string; fullscreenLabel?: string;
+  className?: string; children?: React.ReactNode }
+export declare function LivePlayer(props: LivePlayerProps): React.ReactElement;
+
+export interface VideoPlayerProps { src: string; poster?: string; captions?: string | null; captionsLabel?: string; captionsLang?: string;
+  vertical?: boolean; autoPlay?: boolean; duration?: number; label?: string;
+  highlights?: { start: number; end: number; label: string }[]; highlightsLabel?: string;
+  onProgress?: (seconds: number, duration: number, ended: boolean) => void; onEnded?: () => void }
+export declare function VideoPlayer(props: VideoPlayerProps): React.ReactElement;
+
+export interface VideoMetaProps { title: string; eyebrow?: string; meta?: string; tags?: React.ReactNode[] | null; actions?: React.ReactNode; as?: 'h1' | 'h2' }
+export declare function VideoMeta(props: VideoMetaProps): React.ReactElement;
+
+export interface AIDisclosureProps { children: React.ReactNode }
+export declare function AIDisclosure(props: AIDisclosureProps): React.ReactElement;
+
+export interface SignInDialogProps { open: boolean; onClose: () => void; title: string; body?: string; closeLabel?: string;
+  popupLabel?: string; onPopup: () => void; redirectLabel?: string; onRedirect?: () => void; qr?: React.ReactNode; qrLabel?: string;
+  error?: string; footer?: string }
+export declare function SignInDialog(props: SignInDialogProps): React.ReactElement;
+
+export interface AccountMenuProps { name: string; sub?: string; items: { label: string; href?: string; onClick?: () => void }[] }
+export declare function AccountMenu(props: AccountMenuProps): React.ReactElement;
+
+export interface SkeletonProps { cols?: 1 | 2 | 3 | 4; rows?: 1 | 2; height?: number | string }
+export declare function Skeleton(props: SkeletonProps): React.ReactElement;
+
+export interface EmptyStateProps { title: string; body?: string; action?: React.ReactNode; cols?: 1 | 2 | 3 | 4; rows?: 1 | 2 }
+export declare function EmptyState(props: EmptyStateProps): React.ReactElement;
+
+export interface TopicBentoProps { title: string; id?: string; tag?: string; tagNode?: React.ReactNode; meta?: string; level?: 2 | 3;
+  videos: { image: string; title: string; subtitle?: string; href?: string; alt?: string; focus?: 'top' | string | null }[] }
+export declare function TopicBento(props: TopicBentoProps): React.ReactElement;
+
+export interface BottomNavProps { items: { label: string; href: string; icon: IconName; active?: boolean }[]; label?: string }
+export declare function BottomNav(props: BottomNavProps): React.ReactElement;
+
 declare global { interface Window { Midea: { Logo: typeof Logo; Icon: typeof Icon; Button: typeof Button; SignInButton: typeof SignInButton;
   SearchField: typeof SearchField; SegmentedTabs: typeof SegmentedTabs; SiteHeader: typeof SiteHeader; SiteFooter: typeof SiteFooter;
   Badge: typeof Badge; Tag: typeof Tag; ProgressBar: typeof ProgressBar; SectionHeader: typeof SectionHeader; BentoGrid: typeof BentoGrid;
   VideoTile: typeof VideoTile; ThemeTile: typeof ThemeTile; RankTile: typeof RankTile; RankRow: typeof RankRow; DaySlot: typeof DaySlot;
-  ActorCard: typeof ActorCard } } }
+  ActorCard: typeof ActorCard; InfluenceTag: typeof InfluenceTag; ViewerCount: typeof ViewerCount; ReactionBar: typeof ReactionBar;
+  LiveReactions: typeof LiveReactions; PollCard: typeof PollCard; LivePlayer: typeof LivePlayer; VideoPlayer: typeof VideoPlayer;
+  VideoMeta: typeof VideoMeta; AIDisclosure: typeof AIDisclosure; SignInDialog: typeof SignInDialog; AccountMenu: typeof AccountMenu;
+  Skeleton: typeof Skeleton; EmptyState: typeof EmptyState; TopicBento: typeof TopicBento; BottomNav: typeof BottomNav } } }
