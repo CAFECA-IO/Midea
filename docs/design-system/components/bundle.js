@@ -462,7 +462,11 @@
     flag: [['path', { d: 'M5 21V4M5 4h11l-2 4 2 4H5' }]],
     send: [['path', { d: 'M4 12 20 4l-6 16-3-7z' }]],
     chat: [['path', { d: 'M4 5h16v11H9l-5 4z' }]],
-    star: [['path', { d: 'm12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z' }]]
+    star: [['path', { d: 'm12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z' }]],
+    back: [['path', { d: 'm15 6-6 6 6 6' }]],
+    list: [['path', { d: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' }]],
+    cc: [['rect', { x: 3, y: 6, width: 18, height: 12, rx: 2 }], ['path', { d: 'M10 10.5a2 2 0 1 0 0 3M16 10.5a2 2 0 1 0 0 3' }]],
+    rotate: [['path', { d: 'M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5' }]]
   });
 
   /* ChatPanel — live chat: pinned official note, messages, composer, moderation feedback; collapsible on phones */

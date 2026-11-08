@@ -93,7 +93,7 @@ Midea 是 midea.cafeca.io 的 AI 影音平台：平台上的影片、演員、�
 
 ## 圖示
 
-- 線條圖示，24×24 格線、2px 線寬、圓角端點，顏色跟著文字（`currentColor`）。目前有：search、play、key（CAFECA 登入）、sound-off、sound、arrow-right、chevron-right、expand、bookmark（收藏）、share、eye（正在看）、people（觀眾影響）、check、x、home、calendar、grid、user，以及即時反應的 heart（喜歡）、sparkle（美）、smile（好笑）、tear（感動）、plus（想看更多）。用 `Icon` 元件，不要用表情符號。
+- 線條圖示，24×24 格線、2px 線寬、圓角端點，顏色跟著文字（`currentColor`）。目前有：search、play、key（CAFECA 登入）、sound-off、sound、arrow-right、chevron-right、expand、bookmark（收藏）、share、eye（正在看）、people（觀眾影響）、check、x、home、calendar、grid、user、back、list、cc（字幕）、rotate（橫向）、flag、send、chat、star，以及即時反應的 heart（喜歡）、sparkle（美）、smile（好笑）、tear（感動）、plus（想看更多）。用 `Icon` 元件，不要用表情符號。
 - 播放鍵是實心三角形，其他都是線條。
 
 ## 標誌
