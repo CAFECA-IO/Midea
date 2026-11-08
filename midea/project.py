@@ -28,10 +28,10 @@ class Project:
 
     # ---------------------------------------------------------------- creation / io
     @classmethod
-    def create(cls, brief: dict, pipeline: str) -> "Project":
+    def create(cls, brief: dict, pipeline: str, owner: str = "") -> "Project":
         slug = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
         p = cls(slug)
-        p.save({"id": slug, "created": time.time(), "brief": brief, "pipeline": pipeline, "status": "created",
+        p.save({"id": slug, "created": time.time(), "owner": owner, "brief": brief, "pipeline": pipeline, "status": "created",
                 "stage": None, "stages": {}, "gates": {}, "cost": {"estimated": 0.0, "actual": 0.0, "lines": []},
                 "decisions": [], "events": [], "deliverables": {}})
         return p
@@ -159,6 +159,7 @@ def list_projects() -> list[dict]:
         try:
             d = json.loads(f.read_text(encoding="utf-8"))
             out.append({k: d.get(k) for k in ("id", "created", "pipeline", "status", "stage")} |
+                       {"owner": d.get("owner") or "", "listing": (d.get("listing") or {}).get("status", "")} |
                        {"title": d.get("brief", {}).get("prompt", "")[:80], "cost": d.get("cost", {})})
         except Exception:  # noqa: BLE001
             continue

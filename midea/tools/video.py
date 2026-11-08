@@ -315,6 +315,44 @@ def thumbnail(src: str, out: str, at: float | None = None) -> str:
     return out
 
 
+def clean_frame_time(duration: float, busy: list[tuple[float, float]], lo: float = 0.15, hi: float = 0.85,
+                     min_gap: float = 0.6) -> float:
+    """Middle of the longest stretch inside [lo, hi] of the video with no subtitle / super / title on screen.
+    Falls back to the middle of the video when every moment carries text."""
+    a, b = duration * lo, duration * hi
+    spans = sorted((max(a, s), min(b, e)) for s, e in busy if e > a and s < b)
+    best, best_len, cur = (a + b) / 2, 0.0, a
+    for s, e in spans + [(b, b)]:
+        if s - cur > best_len:
+            best_len, best = s - cur, (cur + s) / 2
+        cur = max(cur, e)
+    return best if best_len >= min_gap else (a + b) / 2
+
+
+def text_spans_for(video: str, srt: str | None = None, extra: list[tuple[float, float]] | None = None,
+                   head_s: float = 3.5, tail_s: float = 6.0) -> tuple[float, list[tuple[float, float]]]:
+    """Moments that carry text: subtitle cues, the opening title (first `head_s`), the end card (last `tail_s`)."""
+    from ..media import ff
+    from .subtitles import read_srt
+    dur = ff.duration(video)
+    busy = [(0.0, head_s), (max(0.0, dur - tail_s), dur)] + list(extra or [])
+    if srt and Path(srt).exists():
+        busy += [(c["start"] - 0.25, c["end"] + 0.25) for c in read_srt(srt)]
+    return dur, busy
+
+
+@tool("video.clean_thumbnail", "video")
+def clean_thumbnail(src: str, out: str, srt: str | None = None, extra: list | None = None) -> str:
+    """Thumbnail from a moment without burned-in subtitles, supers or titles (tiles must not show text)."""
+    dur, busy = text_spans_for(src, srt, [tuple(x) for x in (extra or [])], head_s=3.5 if dur_ok(src) else 0.5)
+    return thumbnail(src, out, at=clean_frame_time(dur, busy))
+
+
+def dur_ok(src: str) -> bool:
+    from ..media import ff
+    return ff.duration(src) > 12
+
+
 @tool("video.contact_sheet", "video", tags=["review"])
 def contact_sheet(src: str, out: str, cols: int = 4, rows: int = 3, width: int = 1600) -> str:
     """Grid of evenly spaced frames for storyboard review."""

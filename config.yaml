@@ -214,5 +214,12 @@ site:
   ai_titles: false                 # true = 每週排程時請 Qwen 為主打時段命名（失敗時沿用規則產生的名稱）
   rerun_min_votes: 3               # 時段結束投票至少幾票才算「觀眾想再看」
   highlight_min: 5                 # 一個 5 秒區間至少幾個即時反應才標成精華
+  wish_threshold: 30               # 許願卡 +1 達幾人送管理者核准製作
+  wish_merge_similarity: 0.6       # 許願文字相似度達多少就合併成同一張卡
+  admins: []                       # 管理者的 CAFECA 帳戶地址；也可以用 `midea site admin <代號>` 指定
+  studio:                          # /studio 製作後台（每個 CAFECA 身分一個）
+    max_actors: 3                  # 每人最多幾位專屬演員
+    max_active_projects: 1         # 每人同時製作中的影片數（GPU 共用）
+    max_upload_mb: 500
   cafeca:
     wallet: https://cafeca.io      # 其餘（chain、rpc、合約）讀 /.well-known/cafeca-configuration

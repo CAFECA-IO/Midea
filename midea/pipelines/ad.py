@@ -844,6 +844,14 @@ time; vary shot sizes; at most 3 people per shot. Return JSON {{"shots":[..]}}."
             "warn" if any(r["status"] == "warn" for r in rep["reports"]) else "pass"
         return rep
 
+    def _text_windows(self, output: dict) -> list[tuple[float, float]]:
+        """Supers are burned in during their beats (60-second timeline); the 15-second cut has its own timing."""
+        if "15s" in str(output.get("tag") or ""):
+            return []
+        copy = self.p.stage_data("copy") or {}
+        beats = {b.get("beat"): (float(b.get("start", 0)), float(b.get("end", 0))) for b in copy.get("outline") or []}
+        return [beats[s["beat"]] for s in copy.get("supers") or [] if s.get("beat") in beats]
+
     def _title(self) -> str:
         h = ((self.p.stage_data("copy") or {}).get("headline") or "").strip().rstrip(".。!！")
         brand = ((self.p.stage_data("product") or {}).get("brand") or "").strip()

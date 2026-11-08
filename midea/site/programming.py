@@ -40,6 +40,7 @@ INFLUENCE = {
     "rerun": "觀眾想再看",
     "highlight": "觀眾最有反應的片段",
     "polling": "觀眾決定 · 投票中",
+    "wish": "依觀眾許願",
 }
 
 
@@ -100,13 +101,36 @@ class Topic:
         return {"key": self.key, "title": self.title, "videos": self.works, "note": self.note}
 
 
-def build_topics(cat: Catalog, wscores: dict[str, float]) -> list[Topic]:
+def _bigrams(t: str) -> set[str]:
+    t = "".join(ch for ch in (t or "").lower() if ch.isalnum())
+    return {t[i:i + 2] for i in range(len(t) - 1)}
+
+
+def wish_topics(cat: Catalog, wishes: list[dict]) -> list[tuple[dict, list[Video]]]:
+    """Wish cards the platform can already answer with ≥ 2 existing works."""
+    works = [v for v in cat.works() if not v.work.startswith("actor:")]
+    out = []
+    for w in wishes:
+        if w["kind"] == "cast":
+            hs = set(json.loads(w["actors"]) if isinstance(w["actors"], str) else w["actors"])
+            vs = [v for v in works if hs and hs <= set(v.actors)]
+        else:
+            want = _bigrams(w["text"])
+            vs = [v for v in works if len(want & _bigrams(" ".join([v.title, v.description, v.kind]))) >= 2]
+        if len(vs) >= 2:
+            out.append((w, vs))
+    return out
+
+
+def build_topics(cat: Catalog, wscores: dict[str, float], wishes: list[dict] | None = None) -> list[Topic]:
     works = cat.works()
 
     def ranked(vs: list[Video]) -> list[str]:
         return [v.id for v in sorted(vs, key=lambda v: (-wscores.get(v.work, 0), -v.created))]
 
     topics: list[Topic] = []
+    for w, vs in wish_topics(cat, wishes or []):
+        topics.append(Topic(f"wish-{w['id']}", w["text"], ranked(vs), "依觀眾許願"))
     names = cat.names()
     for h, name in names.items():
         vs = [v for v in works if h in v.actors and not v.work.startswith("actor:")]
@@ -125,8 +149,8 @@ def build_topics(cat: Catalog, wscores: dict[str, float]) -> list[Topic]:
         topics.append(Topic("fresh", "最近上架", [v.id for v in sorted(fresh, key=lambda v: -v.created)], "兩週內上架"))
     if not topics and works:
         topics.append(Topic("all", "平台全部影片", ranked(works), "全部"))
-    # strongest topics first; ties keep the order above
-    topics.sort(key=lambda t: -sum(wscores.get(cat.get(i).work, 0) for i in t.works if cat.get(i)))
+    # wishes first (the audience asked for them), then the strongest topics; ties keep the order above
+    topics.sort(key=lambda t: (not t.key.startswith("wish-"), -sum(wscores.get(cat.get(i).work, 0) for i in t.works if cat.get(i))))
     return topics
 
 
@@ -138,6 +162,8 @@ class Programming:
         (self.dir / "schedule").mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._rank_cache: dict[str, tuple[float, dict]] = {}
+        self.wish_source = lambda: []             # set by the site: open wish cards
+        self.on_wish_topic = lambda card_id: None  # mark a wish card as 「已成為主題」
 
     # ------------------------------------------------------------ topics (every 6 hours)
     def topics_file(self) -> Path:
@@ -153,7 +179,10 @@ class Programming:
         with self._lock:
             ws = work_scores(self.cat, video_scores(self.store, self.cat, time.time() - 30 * 86400),
                              self.store.live_heat())
-            tops = build_topics(self.cat, ws)
+            tops = build_topics(self.cat, ws, self.wish_source())
+            for t in tops:
+                if t.key.startswith("wish-"):
+                    self.on_wish_topic(int(t.key.split("-", 1)[1]))
             d = {"at": time.time(), "topics": [t.to() for t in tops]}
             _write(self.topics_file(), d)
             log.info("topics regrouped: %s", ", ".join(t.title for t in tops))
@@ -195,7 +224,8 @@ class Programming:
                         t = program_pool[prime_i % len(program_pool)]
                         prime_i += 1
                         slot.update(program=t["key"], title=t["title"], videos=t["videos"][:6],
-                                    reason=f"AI 依本週熱度排入 · {t['note']}")
+                                    reason=f"AI 依本週熱度排入 · {t['note']}",
+                                    influence="wish" if t["key"].startswith("wish-") else None)
                     else:
                         rot = works[k % len(works):] + works[:k % len(works)] if works else []
                         slot.update(program="rotation", title="全天輪播", videos=rot, reason="平台全部影片依序輪播")

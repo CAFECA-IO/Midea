@@ -6,6 +6,7 @@
   midea serve                                          # 開啟分鏡看板 http://127.0.0.1:7788
   midea site                                           # 公開網站 midea.cafeca.io（http://127.0.0.1:10030）
   midea site plan-week                                 # 立即重排本週與下週節目表、重新歸納主題
+  midea site admin luphia                              # 指定管理者（審核上架、檢舉、許願製作；GPU 服務）
   midea approve <project> scene_plan [--reject --note "..."]
   midea services status | up qwen | down h3
   midea tools | pipelines | doctor | qa video.mp4
@@ -61,6 +62,14 @@ def cmd_serve(a: argparse.Namespace) -> None:
 
 
 def cmd_site(a: argparse.Namespace) -> None:
+    if a.action == "admin":
+        from .site.app import st
+        if not a.who:
+            rows = st().store.q("SELECT r.account, v.handle FROM role r LEFT JOIN viewer v ON v.account=r.account")
+            print("\n".join(f"{r['account']}  @{r['handle'] or '?'}" for r in rows) or "（還沒有管理者）")
+            return
+        print("已設為管理者：", st().com.grant_admin(a.who))
+        return
     if a.action == "plan-week":
         from datetime import timedelta
         from .site.app import st
@@ -218,7 +227,8 @@ def main(argv: list[str] | None = None) -> None:
     m.add_argument("-y", "--yes", action="store_true", help="auto-approve all gates")
     m.set_defaults(fn=cmd_make)
     s = sp.add_parser("serve"); s.add_argument("--host"); s.add_argument("--port", type=int); s.set_defaults(fn=cmd_serve)
-    w = sp.add_parser("site", help="public site midea.cafeca.io"); w.add_argument("action", nargs="?", default="serve", choices=["serve", "plan-week"])
+    w = sp.add_parser("site", help="public site midea.cafeca.io"); w.add_argument("action", nargs="?", default="serve", choices=["serve", "plan-week", "admin"])
+    w.add_argument("who", nargs="?", help="admin：CAFECA 代號或帳戶地址（先登入網站一次）")
     w.add_argument("--host"); w.add_argument("--port", type=int); w.set_defaults(fn=cmd_site)
     g = sp.add_parser("approve"); g.add_argument("project"); g.add_argument("gate")
     g.add_argument("--reject", action="store_true"); g.add_argument("--note"); g.set_defaults(fn=cmd_approve)

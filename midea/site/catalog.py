@@ -100,6 +100,9 @@ class Catalog:
         self.videos: dict[str, Video] = {}
         self.actors: dict[str, Actor] = {}
         self._dur_cache: dict[str, float] = {}
+        # set by the site: creators' works and actors appear only after the publish review
+        self.project_ok = lambda d: True
+        self.actor_ok = lambda d: True
 
     def refresh(self, force: bool = False) -> "Catalog":
         with self._lock:
@@ -131,7 +134,7 @@ class Catalog:
                 d = json.loads(f.read_text(encoding="utf-8"))
             except Exception:  # noqa: BLE001
                 continue
-            if not d.get("handle"):
+            if not d.get("handle") or not self.actor_ok(d):
                 continue
             head = ""
             for p in d.get("portraits") or []:
@@ -162,7 +165,7 @@ class Catalog:
 
     def _scan_project(self, pj: Path, actors_by_id: dict[str, Actor]) -> list[Video]:
         d = json.loads(pj.read_text(encoding="utf-8"))
-        if d.get("status") != "done" or not (pj.parent / "stages" / "publish.json").exists():
+        if d.get("status") != "done" or not (pj.parent / "stages" / "publish.json").exists() or not self.project_ok(d):
             return []
         items = (d.get("deliverables") or {}).get("items") or []
         if not items:

@@ -18,13 +18,37 @@
     var _v = React.useState({}), slotVotes = _v[0], setSlotVotes = _v[1];
     var _f = React.useState(false), fav = _f[0], setFav = _f[1];
     var tracker = React.useRef(null), started = React.useRef(0), me = S.useMe();
+    var _c = React.useState({ messages: [], pinned: null, slot: null }), chat = _c[0], setChat = _c[1];
+    var _cn = React.useState(''), chatNote = _cn[0], setChatNote = _cn[1];
 
     function load() { return S.api('/live/now').then(function (j) { setNow(j); return j; }); }
+    var slotId = now && now.slot && now.slot.id;
+    React.useEffect(function () { if (slotId) S.api('/live/chat').then(setChat).catch(function () {}); }, [slotId]);
+    function sendChat(text) {
+      return new Promise(function (ok) {
+        S.requireWriter(function () {
+          S.api('/live/chat', { method: 'POST', body: { text: text } }).then(function (j) {
+            if (j.status === 'rejected') { setChatNote(j.message); ok(false); return; }
+            setChatNote(''); if (j.item) setChat(function (c) { return c.messages.some(function (x) { return x.id === j.item.id; }) ? c : Object.assign({}, c, { messages: c.messages.concat([j.item]) }); });
+            ok(true);
+          }).catch(function (e) { setChatNote(e.message); ok(false); });
+        });
+      });
+    }
     React.useEffect(function () { load(); }, []);
     React.useEffect(function () {
       if (!window.EventSource) return;
       var es = new EventSource('/api/public/v1/live/stream');
-      es.onmessage = function (e) { try { setTick(JSON.parse(e.data)); } catch (x) {} };
+      es.onmessage = function (e) {
+        try {
+          var j = JSON.parse(e.data); setTick(j);
+          if (j.chat || j.chat_removed) setChat(function (c) {
+            var gone = j.chat_removed || [];
+            var add = (j.chat || []).filter(function (m) { return m.slot === c.slot && !c.messages.some(function (x) { return x.id === m.id; }); });
+            return Object.assign({}, c, { messages: c.messages.concat(add).filter(function (m) { return gone.indexOf(m.id) < 0; }).slice(-200) });
+          });
+        } catch (x) {}
+      };
       return function () { es.close(); };
     }, []);
     // a new item: start tracking how much of it this viewer actually watches
@@ -108,7 +132,13 @@
           reasons: REASONS, reasonPrompt: '可以告訴我們原因（可略過）', skipLabel: '略過',
           note: '不用登入也可以按 · 你的反應會影響你看到的主題' }) : null,
         h(M.AIDisclosure, null, '官方頻道的節目由 AI 從平台影片排定；影片由 AI 製作，演員皆為虛擬角色。')),
-      h('aside', { className: 'live-side', 'aria-label': '接下來' },
+      h('div', { className: 'live-side' },
+        h(M.ChatPanel, { title: '聊天室', meta: tick.viewers ? tick.viewers + ' 人正在看' : null, pinned: chat.pinned, pinnedLabel: '官方',
+          messages: chat.messages, onReport: function (m) { S.report('chat', m.id); }, reportLabel: '檢舉這則訊息',
+          signedIn: !!me, onSignIn: function () { S.openSignIn(); }, signInLabel: '以 CAFECA 登入後聊天',
+          placeholder: me && me.restriction ? me.restriction : '說點什麼（最多 100 字）', inputLabel: '聊天訊息', sendLabel: '送出', max: 100,
+          disabled: !!(me && me.restriction), notice: chatNote, hint: '每 5 秒 1 則 · 訊息先經過審核才顯示 · 可以檢舉不當內容',
+          collapseLabel: '收起', expandLabel: '展開聊天室', defaultOpen: window.innerWidth >= 640 }),
         h('div', { className: 'panel' }, h('h2', null, '這個時段'),
           (now.playlist || []).map(function (id, i) { return h(UpNext, { key: id + i, id: id, now: i === now.index }); })),
         now.next ? h('div', { className: 'panel' }, h('h2', null, '接下來 ' + now.next.range),

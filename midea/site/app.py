@@ -24,6 +24,7 @@ from . import cafeca
 from .catalog import catalog
 from .live import LIVE_KINDS, LiveRoom
 from .programming import INFLUENCE, Programming, day_label, hm, now_local, slot_range, week_start
+from .community import CATEGORY, Community, Worker
 from .store import Store, kyc_bucket
 
 log = get_logger("site")
@@ -55,7 +56,22 @@ class State:
         self.cat = catalog()
         self.prog = Programming(self.store, self.cat, data_dir())
         self.live = LiveRoom(self.store)
+        self.com = Community(self.store)
         self.post_responses: dict[str, tuple[float, Any]] = {}     # QR (post mode): nonce → wallet response
+        self.chat_seen = int((self.store.one("SELECT MAX(id) m FROM chat") or {"m": 0})["m"] or 0)
+        from . import studio
+        self.cat.project_ok = lambda d: studio.project_listed(self, d)
+        self.cat.actor_ok = lambda d: studio.actor_listed(self, d)
+        self.prog.wish_source = self.com.open_wishes_for_topics
+        self.prog.on_wish_topic = lambda cid: self.com.set_card_status(cid, "topic") if (
+            self.store.one("SELECT status FROM wish_card WHERE id=?", (cid,)) or {"status": ""})["status"] == "open" else None
+        self.worker = Worker(self.com, actor_bible)
+
+
+def actor_bible(handle: str) -> dict | None:
+    from .. import actors as AC
+    a = AC.find(handle)
+    return AC.bible(a) | {"name": a.name, "handle": a.handle} if a else None
 
 
 S: State | None = None
@@ -133,8 +149,12 @@ def need_login(request: Request):
 def me_public(v) -> dict | None:
     if not v:
         return None
+    s = st()
+    ok, why = s.com.writer_state(v)
     return {"account": v["account"], "handle": v["handle"], "nickname": v["nickname"] or v["handle"] or v["account"][:8],
-            "kyc_level": v["kyc_level"], "kyc_bucket": kyc_bucket(v["kyc_level"])}
+            "has_nickname": bool(v["nickname"]), "kyc_level": v["kyc_level"], "kyc_bucket": kyc_bucket(v["kyc_level"]),
+            "admin": s.com.is_admin(v["account"]), "can_write": ok, "restriction": why or None,
+            "wishes_left": s.com.wishes_left(int(v["id"]))}
 
 
 def src_of(request: Request) -> str:
@@ -159,8 +179,13 @@ async def _start():
                 s.live.broadcast(live_tick())
                 if n % 5 == 0:
                     await asyncio.to_thread(s.live.flush)
+                if n % 30 == 0:
+                    asyncio.get_running_loop().run_in_executor(None, s.worker.run_once)   # AI moderation + actor replies
                 if n % 60 == 0:
                     await asyncio.to_thread(s.prog.ensure)
+                    from . import studio
+                    if await asyncio.to_thread(studio.queue_listings, s):
+                        s.cat.refresh(force=True)
                 if n % 3600 == 0:
                     await asyncio.to_thread(s.prog.write_highlights)
             except Exception as e:  # noqa: BLE001
@@ -289,6 +314,12 @@ def live_tick() -> dict:
     sl = s.prog.slot_at(now)
     second = s.live.take_second()
     ev: dict = {"t": "tick", "at": now, "reactions": second["show"], "viewers": s.live.viewers()}
+    new = s.com.chat_since(s.chat_seen)
+    if new:
+        s.chat_seen = new[-1]["id"]
+        ev["chat"] = new
+    if s.com.retracted:
+        ev["chat_removed"], s.com.retracted = s.com.retracted[:], []
     if sl:
         ev["slot"] = {"id": sl["id"], "ends_in": round(sl["end"] - now)}
         if sl["end"] - now <= 60 and sl.get("program") not in (None, "rotation"):
@@ -346,6 +377,7 @@ def topics_for(viewer: int | None) -> list[dict]:
         hit = next((s.cat.get(v) for v in vids if s.cat.get(v).work in liked_works), None)
         reason = f"因為你喜歡《{hit.title}》" if hit else t.get("note") or ""
         out.append({"key": t["key"], "title": t["title"], "reason": reason, "personal": bool(hit),
+                    "influence": INFLUENCE["wish"] if t["key"].startswith("wish-") else None,
                     "videos": [vpub(v) for v in vids[:5]], "count": len(vids)})
     out.sort(key=lambda t: not t["personal"])
     at = now_local(d["at"])
@@ -650,3 +682,206 @@ def api_schedule(week: str | None = None):
     pub = now_local(plan["published"])
     return {"week": mon.isoformat(), "by": plan.get("by"), "published": f"{pub.month}/{pub.day} {pub.strftime('%H:%M')}",
             "days": [{"day": k, "today": k == day_label(now_local()), "slots": v} for k, v in days.items()]}
+
+
+# ------------------------------------------------------------------------------------------------ API: phase 2 (community)
+def _writer(request: Request):
+    v = need_login(request)
+    return v
+
+
+def _err(e: Exception) -> HTTPException:
+    code = {PermissionError: 403, OverflowError: 429, LookupError: 404}.get(type(e), 400)
+    return HTTPException(code, str(e))
+
+
+@app.post(API + "/me/nickname")
+def api_nickname(request: Request, body: dict = Body(...)):
+    v = _writer(request)
+    s = st()
+    from .. import actors as AC
+    names = [x for a in AC.list_all() for x in (a.name, a.handle)]
+    try:
+        n = s.com.set_nickname(int(v["id"]), str(body.get("nickname") or ""), names)
+    except ValueError as e:
+        raise _err(e) from e
+    return {"nickname": n}
+
+
+@app.get(API + "/me/notices")
+def api_notices(request: Request):
+    v = need_login(request)
+    return {"notices": st().com.notices(int(v["id"]))}
+
+
+@app.get(API + "/live/chat")
+def api_chat(request: Request, slot: str | None = None):
+    s = st()
+    sl = s.prog.slot_at(time.time())
+    sid = slot or (sl and sl["id"])
+    pinned = None
+    if sl and sid == sl["id"]:
+        pinned = f"本時段「{sl['title']}」{slot_range(sl['start'])} · {len(sl['videos'])} 部 · {sl.get('reason', '')}"
+    return {"slot": sid, "pinned": pinned, "messages": s.com.recent_chat(sid) if sid else []}
+
+
+@app.post(API + "/live/chat")
+def api_chat_post(request: Request, body: dict = Body(...)):
+    v = _writer(request)
+    s = st()
+    sl = s.prog.slot_at(time.time())
+    if not sl:
+        raise HTTPException(409, "現在沒有直播")
+    try:
+        return s.com.post_chat(v, sl["id"], str(body.get("text") or ""))
+    except (PermissionError, OverflowError, ValueError) as e:
+        raise _err(e) from e
+
+
+@app.get(API + "/wishes")
+def api_wishes(request: Request, status: str | None = None):
+    viewer, anon, v = actor_id(request)
+    s = st()
+    return {"cards": s.com.wall(None if anon else viewer, status if status in ("open", "topic", "producing", "done") else None),
+            "left": s.com.wishes_left(viewer) if not anon else None, "threshold": int(settings().get("site.wish_threshold", 30)),
+            "actors": [{"handle": a.handle, "name": a.name, "image": f"/media/a/{a.handle}.jpg"} for a in s.cat.refresh().actors.values()]}
+
+
+@app.post(API + "/wishes")
+def api_wish(request: Request, body: dict = Body(...)):
+    v = _writer(request)
+    s = st()
+    try:
+        return s.com.make_wish(v, str(body.get("kind") or "topic"), str(body.get("text") or ""), list(body.get("actors") or []),
+                               {h: a.name for h, a in s.cat.refresh().actors.items()})
+    except (PermissionError, OverflowError, ValueError) as e:
+        raise _err(e) from e
+
+
+@app.post(API + "/wishes/{card}/support")
+def api_wish_support(card: int, request: Request):
+    v = _writer(request)
+    try:
+        return st().com.support_wish(int(v["id"]), card, True)
+    except LookupError as e:
+        raise _err(e) from e
+
+
+@app.delete(API + "/wishes/{card}/support")
+def api_wish_unsupport(card: int, request: Request):
+    v = _writer(request)
+    try:
+        return st().com.support_wish(int(v["id"]), card, False)
+    except LookupError as e:
+        raise _err(e) from e
+
+
+def actor_pub(handle: str, viewer: int | None) -> dict:
+    s = st()
+    a = s.cat.refresh().actors.get(handle)
+    if not a:
+        raise HTTPException(404, "找不到這位演員")
+    from .. import actors as AC
+    full = AC.find(handle)
+    works = [v.public(s.cat.names()) for v in s.cat.works() if handle in v.actors and not v.work.startswith("actor:")]
+    answered = s.com.questions(handle, viewer, order="answered", limit=12)
+    return {"actor": a.public() | {"bio": full.bio if full else "", "personality": full.personality if full else "",
+                                    "age": a.age, "official": not (full and full.owner)},
+            "intro": vpub(a.intro_video) if a.intro_video else None, "works": works,
+            "counts": {"works": len(works), "questions": int(s.store.one("SELECT COUNT(*) n FROM question WHERE actor=? AND status='shown'", (handle,))["n"]),
+                       "answers": sum(1 for q in answered if q["answer_video"])},
+            "left": s.com.questions_left(viewer) if viewer else None}
+
+
+@app.get(API + "/actors/{handle}")
+def api_actor(handle: str, request: Request):
+    viewer, anon, _ = actor_id(request)
+    return actor_pub(handle, None if anon else viewer)
+
+
+@app.get(API + "/actors/{handle}/questions")
+def api_questions(handle: str, request: Request, order: str = "top"):
+    viewer, anon, _ = actor_id(request)
+    if handle not in st().cat.refresh().actors:
+        raise HTTPException(404)
+    s = st()
+    v = None if anon else viewer
+    return {"questions": s.com.questions(handle, v, order if order in ("top", "new", "answered") else "top"),
+            "mine": s.com.my_questions(v, handle) if v else []}
+
+
+@app.post(API + "/actors/{handle}/questions")
+def api_ask(handle: str, request: Request, body: dict = Body(...)):
+    v = _writer(request)
+    s = st()
+    if handle not in s.cat.refresh().actors:
+        raise HTTPException(404)
+    try:
+        out = s.com.ask(v, handle, str(body.get("text") or ""))
+    except (PermissionError, OverflowError, ValueError) as e:
+        raise _err(e) from e
+    return out
+
+
+@app.post(API + "/questions/{qid}/support")
+def api_q_support(qid: int, request: Request):
+    v = _writer(request)
+    try:
+        return {"supporters": st().com.support_question(int(v["id"]), qid, True)}
+    except LookupError as e:
+        raise _err(e) from e
+
+
+@app.delete(API + "/questions/{qid}/support")
+def api_q_unsupport(qid: int, request: Request):
+    v = _writer(request)
+    try:
+        return {"supporters": st().com.support_question(int(v["id"]), qid, False)}
+    except LookupError as e:
+        raise _err(e) from e
+
+
+@app.post(API + "/reports")
+def api_report(request: Request, body: dict = Body(...)):
+    v = need_login(request)
+    try:
+        return st().com.report(int(v["id"]), str(body.get("kind")), int(body.get("id") or 0), body.get("reason"))
+    except (ValueError, LookupError) as e:
+        raise _err(e) from e
+
+
+@app.get(API + "/topics/{key}")
+def api_topic(key: str, request: Request):
+    s = st()
+    viewer, anon, _ = actor_id(request)
+    for t in topics_for(None if anon else viewer):
+        if t["key"] == key:
+            allv = next((x["videos"] for x in s.prog.topics()["topics"] if x["key"] == key), [])
+            return t | {"videos": [x for x in (vpub(v) for v in allv) if x]}
+    raise HTTPException(404, "這個主題已經重新歸納，請回首頁看看最新的主題")
+
+
+@app.get("/actor/{handle}", response_class=HTMLResponse)
+def actor_page(handle: str):
+    return _page("actor.html")
+
+
+@app.get("/topic/{key}", response_class=HTMLResponse)
+def topic_page(key: str):
+    return _page("topic.html")
+
+
+@app.get("/wishes", response_class=HTMLResponse)
+def wishes_page():
+    return _page("wishes.html")
+
+
+# ------------------------------------------------------------------------------------------------ the studio (/studio)
+def _mount_studio() -> None:
+    from ..web import app as board
+    from . import studio
+    studio.install(st)
+    app.mount("/studio", board.app)
+
+
+_mount_studio()

@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from .. import actors as AC
@@ -23,6 +23,8 @@ from ..gpu import scheduler
 from ..pipelines import load_defs, route, run_async
 from ..project import Project, list_projects, on_event
 from ..tools import catalog
+from . import access
+from .access import OPERATOR, User
 
 app = FastAPI(title="Midea Studio")
 
@@ -32,9 +34,27 @@ _AUTH_USER = os.environ.get("MIDEA_BOARD_USER", "midea")
 _AUTH_PASS = os.environ.get("MIDEA_BOARD_PASSWORD", "")
 
 
+# "basic" (standalone `midea serve`) or "cafeca" (mounted at /studio inside the public site, see midea/site/app.py)
+AUTH = {"mode": "basic", "resolve": None}
+
+
 @app.middleware("http")
-async def _basic_auth(request: Request, call_next):
-    if _AUTH_PASS and request.url.path != "/healthz":
+async def _auth(request: Request, call_next):
+    path = request.scope.get("path", "")
+    root = request.scope.get("root_path", "")
+    rel = path[len(root):] if root and path.startswith(root) else path
+    if AUTH["mode"] == "cafeca":
+        u = AUTH["resolve"](request) if AUTH["resolve"] else None
+        if u is None and rel != "/healthz":
+            if rel in ("", "/") and request.method == "GET":
+                return RedirectResponse("/?signin=studio", status_code=302)
+            return JSONResponse({"detail": "以 CAFECA 登入後才能使用製作後台"}, status_code=401)
+        if request.method not in ("GET", "HEAD") and request.headers.get("x-midea") != "1":
+            return JSONResponse({"detail": "missing X-Midea header"}, status_code=403)
+        request.state.user = u
+        return await call_next(request)
+    request.state.user = OPERATOR
+    if _AUTH_PASS and rel != "/healthz":
         ok = False
         h = request.headers.get("authorization", "")
         if h.lower().startswith("basic "):
@@ -106,9 +126,11 @@ def index() -> str:
 
 
 @app.get("/api/meta")
-def meta() -> dict:
+def meta(request: Request) -> dict:
+    u = access.user(request)
     return {"mode": settings().mode, "pipelines": load_defs(), "currency": settings().get("gpu.currency"),
-            "budget": settings().get("budget"), "tools": len(catalog())}
+            "budget": settings().get("budget"), "tools": len(catalog()), "me": u.public(), "auth": AUTH["mode"],
+            "limits": {"actors": access.limit("max_actors", 3), "active": access.limit("max_active_projects", 1)}}
 
 
 @app.get("/api/tools")
@@ -117,12 +139,16 @@ def tools() -> list[dict]:
 
 
 @app.get("/api/gpu")
-def gpu() -> dict:
-    return scheduler().status()
+def gpu(request: Request) -> dict:
+    st = scheduler().status()
+    if not access.user(request).admin:          # other tenants' processes are not everyone's business
+        st.pop("foreign", None)
+    return st
 
 
 @app.post("/api/services/{name}/{action}")
-def service(name: str, action: str) -> dict:
+def service(name: str, action: str, request: Request) -> dict:
+    access.require_admin(request)
     s = scheduler()
     if name not in s.services:
         raise HTTPException(404)
@@ -137,43 +163,88 @@ def service(name: str, action: str) -> dict:
 
 
 @app.get("/api/projects")
-def projects() -> list[dict]:
-    return list_projects()
+def projects(request: Request) -> list[dict]:
+    u = access.user(request)
+    return [p for p in list_projects() if u.owns(p.get("owner"))]
+
+
+def _active_count(u: User) -> int:
+    n = 0
+    for pid, t in list(_runs.items()):
+        if t.is_alive():
+            try:
+                if (Project(pid).load().get("owner") or "") == u.account:
+                    n += 1
+            except Exception:  # noqa: BLE001
+                pass
+    return n
+
+
+def _check_quota(u: User) -> None:
+    if u.admin:
+        return
+    if _active_count(u) >= access.limit("max_active_projects", 1):
+        raise HTTPException(429, "你已經有一支影片在製作中，完成後才能開始下一支（GPU 由大家輪流使用）")
+
+
+def _castable(u: User, ids: list[str]) -> list[str]:
+    """Official actors and your own; someone else's actor cannot be cast."""
+    out = []
+    for aid in ids:
+        a = AC.load(aid)
+        if a.owner and not u.owns(a.owner):
+            raise HTTPException(403, f"@{a.handle} 是其他創作者的專屬演員，不能指定演出")
+        out.append(aid)
+    return out
 
 
 @app.post("/api/projects")
-def create(req: NewProject) -> dict:
+def create(req: NewProject, request: Request) -> dict:
+    u = access.user(request)
+    _check_quota(u)
     brief = req.model_dump(exclude={"auto_approve"})
-    brief["actors"] = AC.resolve_list(req.actors + AC.mentions(req.prompt))
+    brief["actors"] = _castable(u, AC.resolve_list(req.actors + AC.mentions(req.prompt)))
+    brief["user_media"] = access.check_media(u, req.user_media)
+    brief["reference_url"] = access.public_url(u, req.reference_url, "參考影片網址")
     if req.aspect:
         brief["aspect_locked"] = True
     else:
         brief.pop("aspect")
     pipe = req.pipeline if req.pipeline != "auto" else route(brief)
-    p = Project.create(brief, pipe)
-    _runs[p.id] = run_async(p, auto_approve=req.auto_approve)
+    p = Project.create(brief, pipe, owner=u.account)
+    _runs[p.id] = run_async(p, auto_approve=req.auto_approve and u.admin)
     return {"id": p.id, "pipeline": pipe}
 
 
 @app.post("/api/upload")
-async def upload(file: UploadFile = File(...)) -> dict:
-    d = settings().workspace / "_uploads"
-    d.mkdir(exist_ok=True)
+async def upload(request: Request, file: UploadFile = File(...)) -> dict:
+    d = access.upload_dir(access.user(request))
     dst = d / f"{uuid.uuid4().hex[:8]}_{Path(file.filename or 'media').name}"
+    max_mb = access.limit("max_upload_mb", 500)
+    size = 0
     with open(dst, "wb") as fh:
-        shutil.copyfileobj(file.file, fh)
+        while chunk := file.file.read(1 << 20):
+            size += len(chunk)
+            if size > max_mb << 20:
+                fh.close()
+                dst.unlink(missing_ok=True)
+                raise HTTPException(413, f"檔案超過 {max_mb} MB")
+            fh.write(chunk)
     return {"path": str(dst)}
 
 
-def _proj(pid: str) -> Project:
-    if not (settings().workspace / pid / "project.json").exists():
+def _proj(pid: str, request: Request | None = None) -> Project:
+    if not (settings().workspace / pid / "project.json").exists() or "/" in pid or pid.startswith(("_", ".")):
         raise HTTPException(404, "project not found")
-    return Project(pid)
+    p = Project(pid)
+    if request is not None and not access.user(request).owns(p.load().get("owner")):
+        raise HTTPException(404, "project not found")
+    return p
 
 
 @app.get("/api/projects/{pid}")
-def project(pid: str) -> dict:
-    p = _proj(pid)
+def project(pid: str, request: Request) -> dict:
+    p = _proj(pid, request)
     d = p.load()
     d["data"] = {s: p.stage_data(s) for s in ("reference_analysis", "proposal", "script", "scene_plan", "voice", "assets",
                                               "music_sfx", "highlights", "translate", "compose", "qa", "publish",
@@ -200,8 +271,8 @@ def project(pid: str) -> dict:
 
 
 @app.post("/api/projects/{pid}/gates/{gate}")
-def decide(pid: str, gate: str, dec: GateDecision) -> dict:
-    p = _proj(pid)
+def decide(pid: str, gate: str, dec: GateDecision, request: Request) -> dict:
+    p = _proj(pid, request)
     p.decide_gate(gate, dec.approved, dec.note, dec.edits, by="board")
     if not (pid in _runs and _runs[pid].is_alive()):      # server restarted: resume the run
         _runs[pid] = run_async(p)
@@ -209,18 +280,20 @@ def decide(pid: str, gate: str, dec: GateDecision) -> dict:
 
 
 @app.post("/api/projects/{pid}/resume")
-def resume(pid: str, auto_approve: bool = False) -> dict:
-    p = _proj(pid)
+def resume(pid: str, request: Request, auto_approve: bool = False) -> dict:
+    p = _proj(pid, request)
     if pid in _runs and _runs[pid].is_alive():
         return {"ok": True, "running": True}
-    _runs[pid] = run_async(p, auto_approve=auto_approve)
+    u = access.user(request)
+    _check_quota(u)
+    _runs[pid] = run_async(p, auto_approve=auto_approve and u.admin)
     return {"ok": True}
 
 
 @app.post("/api/projects/{pid}/rewind/{stage}")
-def rewind(pid: str, stage: str) -> dict:
+def rewind(pid: str, stage: str, request: Request) -> dict:
     """Mark `stage` and everything after it as not done, then resume (e.g. re-cut after editing the plan)."""
-    p = _proj(pid)
+    p = _proj(pid, request)
     order = load_defs()[p.load()["pipeline"]]["stages"]
     if stage not in order:
         raise HTTPException(400, "unknown stage")
@@ -236,14 +309,15 @@ def rewind(pid: str, stage: str) -> dict:
 
 
 @app.put("/api/projects/{pid}/stage/{stage}")
-def edit_stage(pid: str, stage: str, body: dict) -> dict:
-    p = _proj(pid)
+def edit_stage(pid: str, stage: str, body: dict, request: Request) -> dict:
+    p = _proj(pid, request)
     p.checkpoint(stage, body, status=p.load()["stages"].get(stage, {}).get("status", "done"))
     return {"ok": True}
 
 
 @app.get("/files/{pid}/{path:path}")
-def files(pid: str, path: str) -> FileResponse:
+def files(pid: str, path: str, request: Request) -> FileResponse:
+    _proj(pid, request)
     base = (settings().workspace / pid).resolve()
     f = (base / path).resolve()
     if base not in f.parents or not f.is_file():
@@ -252,7 +326,8 @@ def files(pid: str, path: str) -> FileResponse:
 
 
 @app.get("/api/events/{pid}")
-async def events(pid: str) -> StreamingResponse:
+async def events(pid: str, request: Request) -> StreamingResponse:
+    _proj(pid, request)
     q: queue.Queue = queue.Queue()
     _subs.setdefault(pid, []).append(q)
 
@@ -287,11 +362,19 @@ class ActorGen(BaseModel):
     lang: str | None = None
 
 
-def _actor(aid: str) -> AC.Actor:
+def _actor(aid: str, request: Request | None = None, *, write: bool = True) -> AC.Actor:
+    """write=True: only the owner (or an admin; official actors: admins only). write=False: anyone who may cast it."""
     try:
-        return AC.load(aid)
+        a = AC.load(aid)
     except KeyError:
         raise HTTPException(404, "actor not found") from None
+    if request is not None:
+        u = access.user(request)
+        if write and not (u.admin or (a.owner and u.owns(a.owner))):
+            raise HTTPException(403 if not a.owner or u.owns(a.owner) else 404, "只能修改自己建立的演員")
+        if not write and a.owner and not u.owns(a.owner):
+            raise HTTPException(404, "actor not found")
+    return a
 
 
 def _actor_full(a: AC.Actor) -> dict:
@@ -307,23 +390,33 @@ def _actor_full(a: AC.Actor) -> dict:
 
 
 @app.get("/api/actors")
-def actors_list() -> list[dict]:
-    return [AC.summary(a, AC.filmography(a.id)) for a in AC.list_all()]
+def actors_list(request: Request) -> list[dict]:
+    u = access.user(request)
+    return [AC.summary(a, AC.filmography(a.id)) | {"mine": bool(a.owner) and u.owns(a.owner) and a.owner == u.account}
+            for a in AC.list_all() if not a.owner or u.owns(a.owner)]
 
 
 @app.post("/api/actors/draft")
-def actors_draft(req: ActorDraft) -> dict:
+def actors_draft(req: ActorDraft, request: Request) -> dict:
+    access.user(request)
     return AC.draft(req.idea, req.language)
 
 
 @app.post("/api/actors")
-def actors_create(body: dict) -> dict:
+def actors_create(body: dict, request: Request) -> dict:
+    u = access.user(request)
+    if not u.admin and sum(1 for a in AC.list_all() if a.owner == u.account) >= access.limit("max_actors", 3):
+        raise HTTPException(429, f"每個人最多建立 {access.limit('max_actors', 3)} 位專屬演員")
     gen = body.pop("generate", True)
     consent = body.pop("consent", None)
+    for k in ("owner", "listing", "id", "portraits", "intro", "look", "jobs", "cost", "created", "updated"):
+        body.pop(k, None)
     try:
         a = AC.create(body)
     except Exception as e:  # noqa: BLE001 — pydantic validation
         raise HTTPException(400, str(e)[:800]) from None
+    if u.account:
+        AC.update(a.id, lambda x: setattr(x, "owner", u.account))
     if consent:
         AC.update(a.id, lambda x: setattr(x, "consent", AC.Consent(**consent)))
     if gen:
@@ -333,13 +426,19 @@ def actors_create(body: dict) -> dict:
 
 
 @app.get("/api/actors/{aid}")
-def actors_get(aid: str) -> dict:
-    return _actor_full(_actor(aid))
+def actors_get(aid: str, request: Request) -> dict:
+    a = _actor(aid, request, write=False)
+    d = _actor_full(a)
+    u = access.user(request)
+    d["can_edit"] = u.admin or (bool(a.owner) and u.owns(a.owner))
+    if not u.admin:      # other creators' films are not this user's business
+        d["films"] = [f for f in d["films"] if u.owns((Project(f["project"]).load().get("owner") if (settings().workspace / f["project"] / "project.json").exists() else ""))]
+    return d
 
 
 @app.put("/api/actors/{aid}")
-def actors_edit(aid: str, body: dict) -> dict:
-    _actor(aid)
+def actors_edit(aid: str, body: dict, request: Request) -> dict:
+    _actor(aid, request)
     try:
         return _actor_full(AC.edit(aid, body))
     except Exception as e:  # noqa: BLE001
@@ -347,37 +446,37 @@ def actors_edit(aid: str, body: dict) -> dict:
 
 
 @app.delete("/api/actors/{aid}")
-def actors_delete(aid: str) -> dict:
-    _actor(aid)
+def actors_delete(aid: str, request: Request) -> dict:
+    _actor(aid, request)
     AC.delete(aid)
     return {"ok": True}
 
 
 @app.post("/api/actors/{aid}/look")
 @app.post("/api/actors/{aid}/portraits")            # older boards
-def actors_look(aid: str, req: ActorGen) -> dict:
-    _actor(aid)
+def actors_look(aid: str, req: ActorGen, request: Request) -> dict:
+    _actor(aid, request)
     return {"started": AC.run_job(aid, "look", reseed=req.reseed)}
 
 
 @app.post("/api/actors/{aid}/approve-look")
-def actors_approve(aid: str) -> dict:
-    a = _actor(aid)
+def actors_approve(aid: str, request: Request) -> dict:
+    a = _actor(aid, request)
     if not all(v in {AC.view_of(p) for p in a.portraits} for v in AC.LOOK_VIEWS):
         raise HTTPException(400, "還沒有正面大頭照與正面全身照")
     return _actor_full(AC.approve_look(aid, by="board"))
 
 
 @app.post("/api/actors/{aid}/turnaround")
-def actors_turnaround(aid: str, req: ActorGen) -> dict:
-    if not _actor(aid).look.get("approved"):
+def actors_turnaround(aid: str, req: ActorGen, request: Request) -> dict:
+    if not _actor(aid, request).look.get("approved"):
         raise HTTPException(400, "請先確認長相")
     return {"started": AC.run_job(aid, "turnaround", views=req.views)}
 
 
 @app.post("/api/actors/{aid}/view/{view}")
-def actors_view(aid: str, view: str) -> dict:
-    _actor(aid)
+def actors_view(aid: str, view: str, request: Request) -> dict:
+    _actor(aid, request)
     if view not in AC.VIEWS:
         raise HTTPException(400, "unknown view")
     if view in AC.LOOK_VIEWS:
@@ -386,28 +485,28 @@ def actors_view(aid: str, view: str) -> dict:
 
 
 @app.post("/api/actors/{aid}/intro")
-def actors_intro(aid: str, req: ActorGen) -> dict:
-    if not _actor(aid).look.get("approved"):
+def actors_intro(aid: str, req: ActorGen, request: Request) -> dict:
+    if not _actor(aid, request).look.get("approved"):
         raise HTTPException(400, "請先確認長相")
     return {"started": AC.run_job(aid, "intro", text=req.text, lang=req.lang)}
 
 
 @app.post("/api/actors/{aid}/voice")
-def actors_voice(aid: str, req: ActorGen) -> dict:
-    _actor(aid)
+def actors_voice(aid: str, req: ActorGen, request: Request) -> dict:
+    _actor(aid, request)
     return {"started": AC.run_job(aid, "voice", text=req.text, lang=req.lang)}
 
 
 @app.post("/api/actors/{aid}/primary/{view}")
-def actors_primary(aid: str, view: str) -> dict:
-    _actor(aid)
+def actors_primary(aid: str, view: str, request: Request) -> dict:
+    _actor(aid, request)
     return _actor_full(AC.edit(aid, {"primary": view}))
 
 
 @app.post("/api/actors/{aid}/upload")
-async def actors_upload(aid: str, kind: str = Form(...), consent: bool = Form(False), note: str = Form(""),
+async def actors_upload(aid: str, request: Request, kind: str = Form(...), consent: bool = Form(False), note: str = Form(""),
                         view: str = Form("headshot"), transcript: str = Form(""), file: UploadFile = File(...)) -> dict:
-    _actor(aid)
+    _actor(aid, request)
     tmp = AC.adir(aid) / "uploads"
     tmp.mkdir(parents=True, exist_ok=True)
     dst = tmp / f"{uuid.uuid4().hex[:6]}_{Path(file.filename or 'upload').name}"
@@ -426,7 +525,8 @@ async def actors_upload(aid: str, kind: str = Form(...), consent: bool = Form(Fa
 
 
 @app.get("/actor-files/{aid}/{path:path}")
-def actor_files(aid: str, path: str) -> FileResponse:
+def actor_files(aid: str, path: str, request: Request) -> FileResponse:
+    _actor(aid, request, write=False)
     try:
         base = AC.adir(aid).resolve()
     except KeyError:
@@ -456,8 +556,11 @@ class NewAd(BaseModel):
 
 
 @app.post("/api/ads")
-def create_ad(req: NewAd) -> dict:
-    cast = AC.resolve_list([req.lead] + ([req.partner] if req.partner else []))
+def create_ad(req: NewAd, request: Request) -> dict:
+    u = access.user(request)
+    _check_quota(u)
+    access.public_url(u, req.product_url, "商品網址")
+    cast = _castable(u, AC.resolve_list([req.lead] + ([req.partner] if req.partner else [])))
     if not cast:
         raise HTTPException(400, "找不到主演演員")
     names = [AC.load(a).handle for a in cast]
@@ -467,6 +570,6 @@ def create_ad(req: NewAd) -> dict:
              "banned_words": req.banned_words, "formats": [f for f in req.formats if f in ("16:9", "9:16", "1:1")] or ["16:9"],
              "cutdown_15": req.cutdown_15, "style": req.style if req.style in ("standard", "fashion") else "standard",
              "music_genre": req.music_genre if req.music_genre in ("classical", "country") else "", "aspect": "16:9", "aspect_locked": True, "music": True, "subtitles": True}
-    p = Project.create(brief, "ad-60")
-    _runs[p.id] = run_async(p, auto_approve=req.auto_approve)
+    p = Project.create(brief, "ad-60", owner=u.account)
+    _runs[p.id] = run_async(p, auto_approve=req.auto_approve and u.admin)
     return {"id": p.id, "pipeline": "ad-60"}

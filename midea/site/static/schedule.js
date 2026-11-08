@@ -35,14 +35,12 @@
         !d.days.length ? h(M.EmptyState, { title: '節目表還沒公布', body: d.note || '下週節目表每週一 09:00 公布。' }) :
           h('div', { className: 'sec' },
             d.published ? h('p', { className: 'md-meta' }, d.published + ' 由 AI 排定 · 每晚 20:00–24:00 主打時段，其餘時間全天輪播') : null,
-            d.days.map(function (day) {
-              return h('div', { key: day.day, className: 'sched-day' + (day.today ? ' is-today' : '') },
-                h('h3', null, (day.today ? '今天 ' : '') + day.day),
-                h('div', { className: 'sched-slots' }, day.slots.map(function (s) {
-                  return h(M.DaySlot, { key: s.id, day: s.range + (s.now ? ' · 現正播放' : ''), title: s.title, time: s.count + ' 部' + (s.influence ? ' · ' + s.reason : ''),
-                    today: s.now, href: s.now ? '/live' : '#', tag: s.influence ? h(M.InfluenceTag, null, s.influence) : null });
-                })));
-            })));
+            h(M.ScheduleWeek, { nowLabel: '現正播放', days: d.days.map(function (day) {
+              return { label: (day.today ? '今天 ' : '') + day.day, today: day.today, slots: day.slots.map(function (s) {
+                return { id: s.id, range: s.range, title: s.title, now: s.now, href: s.now ? '/live' : (s.program && s.program !== 'audience' && s.program !== 'rotation' ? '/topic/' + encodeURIComponent(s.program) : '#'),
+                  meta: s.count + ' 部' + (s.influence ? ' · ' + s.reason : ''), tag: s.influence ? h(M.InfluenceTag, null, s.influence) : null };
+              }) };
+            }) })));
   }
 
   function kycNote(p) {

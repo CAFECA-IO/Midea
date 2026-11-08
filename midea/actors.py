@@ -171,6 +171,8 @@ class Actor(_M):
     cost: dict = Field(default_factory=lambda: {"actual": 0.0, "lines": []})
     created: float = 0
     updated: float = 0
+    owner: str = ""                 # CAFECA account of the creator; "" = platform (official) actor, castable by everyone
+    listing: dict = Field(default_factory=dict)   # public-site listing review for creators' actors {status, by, at, note}
 
     @field_validator("gender", mode="before")
     @classmethod
@@ -956,7 +958,7 @@ def summary(a: Actor, films: list[dict] | None = None) -> dict:
             "occupation": a.occupation, "tags": a.tags, "thumb": thumb, "voice": bool(a.voice.sample),
             "real_person": a.consent.real_person, "jobs": a.jobs, "intro": a.intro.get("file"),
             "intro_poster": a.intro.get("poster"), "look_approved": bool(a.look.get("approved")),
-            "films": len(films) if films is not None else None}
+            "films": len(films) if films is not None else None, "owner": a.owner, "listing": a.listing.get("status", "")}
 
 
 def filmography(aid: str) -> list[dict]:

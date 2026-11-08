@@ -40,3 +40,29 @@ body { margin: 0; -webkit-font-smoothing: antialiased; }
   .overlay-poll { left: 12px; right: 12px; bottom: 64px; }
 }
 .hero-act { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.wish-layout { display: grid; grid-template-columns: minmax(0, 560px); }
+.wish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
+.actor-top { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 2fr); gap: var(--space-5); grid-auto-rows: minmax(300px, auto); }
+.actor-top .md-tile { min-height: 300px; }
+.actor-card { gap: 16px; }
+.actor-id { display: flex; gap: 18px; align-items: center; }
+.actor-id img { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; object-position: center 25%; border: 2px solid var(--amber); flex: none; }
+.actor-id > div { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.actor-name { margin: 0; font-size: 32px; line-height: 38px; font-weight: 900; }
+.actor-bio { margin: 0; font-size: 15px; line-height: 25px; color: var(--ink-muted); }
+.stat-row { display: flex; gap: 24px; }
+.stat { display: flex; flex-direction: column; font-size: 13px; color: var(--ink-subtle); }
+.stat b { font-size: 20px; color: var(--ink); }
+.ask-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: var(--space-5); align-items: start; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.qlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.qrow { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.qrank { width: 26px; font-size: 18px; font-weight: 900; color: var(--ink-subtle); flex: none; }
+.qrank.is-top { color: var(--amber); }
+.qbody { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 15px; line-height: 22px; min-width: 0; }
+.home-wishes { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-4); }
+@media (max-width: 1023px) { .actor-top { grid-template-columns: 1fr; } }
+@media (max-width: 639px) { .ask-layout { grid-template-columns: 1fr; } }
+.wish-layout { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--space-5); align-items: start; }
+.wish-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 22px; color: var(--ink-muted); }
+.wish-steps b { color: var(--ink); margin-right: 8px; }

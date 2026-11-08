@@ -4,12 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Midea Studio</title>
+<link rel="stylesheet" href="/ds/tokens.css">
+<link rel="icon" href="/ds/midea-mark.svg" type="image/svg+xml">
 <style>
-:root{--bg:#1a1e29;--panel:#20253331;--panel:#212636;--panel2:#272d3f;--line:#343a4d;--fg:#eef0f6;--muted:#7d849a;--accent:#f5a524;--accent2:#8b90c8;--ok:#3fb984;--warn:#f5a524;--bad:#e5534b;--r:4px}
-:root{color-scheme:dark}a{color:var(--accent);text-decoration:none}*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Noto Sans TC","PingFang TC",sans-serif}
+/* palette = design-system tokens (docs/design-system/tokens.css) */
+:root{--bg:var(--ground);--panel:var(--surface);--panel2:var(--surface-raised);--fg:var(--ink);--muted:var(--ink-subtle);--accent:var(--amber);--accent2:var(--amber-text);--ok:var(--rank-up);--warn:var(--amber);--bad:var(--rank-down);--r:14px}
+:root{--bg-legacy:#1a1e29;--fg:#eef0f6;--muted:#7d849a;--accent:#f5a524;--accent2:#8b90c8;--ok:#3fb984;--warn:#f5a524;--bad:#e5534b;--r:4px}
+:root{color-scheme:dark}a{color:var(--accent);text-decoration:none}*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.5 var(--font-sans,system-ui),"Noto Sans TC","PingFang TC",sans-serif}
 button,input,select,textarea{font:inherit;color:inherit}
 button{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
-button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:#1a1e29;font-weight:600}
+button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-amber);font-weight:700}
 button.danger{border-color:var(--bad);color:var(--bad)}button:disabled{opacity:.4;cursor:not-allowed}
 input,select,textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%}
 textarea{resize:vertical}label{display:block;color:var(--muted);font-size:12px;margin:10px 0 4px}
@@ -71,13 +75,20 @@ pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;backgr
 .scene .cast{position:absolute;left:8px;bottom:8px;display:flex;gap:-4px}.scene .cast .av{width:26px;height:26px;border:2px solid #1a1e29;margin-right:-6px}
 @media (max-width:900px){.profile{grid-template-columns:1fr}.film{grid-template-columns:1fr}.fgrid{grid-template-columns:1fr}}
 @media (max-width:900px){.app{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);max-height:none}}
+.me{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-4px 0 12px;font-size:13px;color:var(--muted)}.me b{color:var(--fg)}
+.fb{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}.fb .card{display:flex;flex-direction:column;gap:8px}
+.fb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--bg)}.stat{display:flex;gap:16px;flex-wrap:wrap}.stat div{display:flex;flex-direction:column}.stat b{font-size:20px;font-weight:800}.stat span{font-size:12px;color:var(--muted)}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;display:flex}.bar i{display:block;height:100%}
+.nav{flex-wrap:wrap}.nav button{flex:1 1 28%;white-space:nowrap;padding:6px 8px}
+.rv{display:flex;flex-direction:column;gap:10px}.rv .card{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}.rv .acts{display:flex;gap:6px;flex-wrap:wrap}
 </style>
 </head>
 <body>
 <div class="app">
 <aside>
   <h1>Midea Studio <small id="mode"></small></h1>
-  <div class="nav"><button id="nav-films" class="on" onclick="goFilms()">影片製作</button><button id="nav-actors" onclick="goActors()">演員陣容 <span id="actor-count" style="color:var(--muted)"></span></button><button id="nav-ads" onclick="goAds()">廣告製作</button></div>
+  <div class="me" id="me"></div>
+  <div class="nav"><button id="nav-films" class="on" onclick="goFilms()">影片製作</button><button id="nav-actors" onclick="goActors()">演員陣容 <span id="actor-count" style="color:var(--muted)"></span></button><button id="nav-ads" onclick="goAds()">廣告製作</button><button id="nav-fb" onclick="goFeedback()">觀眾回饋</button><button id="nav-rv" onclick="goReview()" hidden>審核 <span id="rv-count" style="color:var(--muted)"></span></button></div>
   <div class="card">
     <h3>新影片</h3>
     <label>一句話描述</label>
@@ -100,7 +111,7 @@ pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;backgr
     <label class="chk"><input type="checkbox" id="f-real"> 僅使用真實素材（Archive.org / NASA / Wikimedia / Pexels）</label>
     <label class="chk"><input type="checkbox" id="f-music" checked> 背景音樂（ACE-Step）</label>
     <label class="chk"><input type="checkbox" id="f-subs" checked> 字幕壓製</label>
-    <label class="chk"><input type="checkbox" id="f-auto"> 自動通過所有關卡（不建議）</label>
+    <label class="chk" id="f-auto-wrap"><input type="checkbox" id="f-auto"> 自動通過所有關卡（不建議）</label>
     <div style="margin-top:12px"><button class="primary" id="f-go" style="width:100%">開始製作</button></div>
   </div>
   <div class="card" style="margin-top:12px">
@@ -113,38 +124,48 @@ pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;backgr
 </div>
 <script>
 const $ = s => document.querySelector(s), esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const api = async (u, o = {}) => { const r = await fetch(u, { headers: { "Content-Type": "application/json" }, ...o }); if (!r.ok) throw new Error(await r.text()); return r.json(); };
+const BASE = location.pathname.startsWith("/studio") ? "/studio" : "";
+const HDR = { "X-Midea": "1" };
+const errText = async r => { const t = await r.text(); try { const j = JSON.parse(t); return j.detail || t; } catch (e) { return t; } };
+const api = async (u, o = {}) => { const r = await fetch(BASE + u, { ...o, headers: { "Content-Type": "application/json", ...HDR, ...(o.headers || {}) } }); if (r.status === 401 && BASE) { location.href = "/?signin=studio"; throw new Error("請先登入"); } if (!r.ok) throw new Error(await errText(r)); return r.json(); };
 let META = {}, CUR = null, DATA = null, ES = null, TAB = "board", SEL = new Set(), REGEN = {};
 let ACTORS = [], VIEW = "films", ACTOR = null, ACTOR_POLL = null, DRAFT = null, AC_IDX = 0;
-const actorUrl = (id, p) => p ? `/actor-files/${id}/${p}`.replace(/#/g, "%23") : "";
+const actorUrl = (id, p) => p ? `${BASE}/actor-files/${id}/${p}`.replace(/#/g, "%23") : "";
 const GENDER_ZH = { female: "女", male: "男", nonbinary: "非二元" };
 const STATUS_ZH = { done: "完成", running: "製作中", awaiting_approval: "待核准", failed: "失敗", qa_failed: "QA 未過", created: "建立" };
 const STAGE_ZH = { reference_analysis: "參考分析", proposal: "企劃", script: "腳本", scene_plan: "分鏡", voice: "旁白", assets: "素材生成", music_sfx: "音樂音效", edit: "剪輯", compose: "合成字幕", qa: "自我審核", publish: "發佈", ingest: "匯入", transcribe: "轉錄", highlights: "高光", translate: "翻譯", product: "商品解析", tryon: "商品定裝", concepts: "創意提案", copy: "文案腳本", storyboard: "鏡頭分鏡", versions: "多版本輸出" };
 const KIND_ZH = { h3_t2v: "H3 生成", h3_i2v: "H3 圖生影", h3_r2v: "H3 參考", stock_video: "真實影片", stock_image: "真實照片", motion: "動態圖形", title_card: "標題卡", user_media: "自有素材" };
-const fileUrl = p => `/files/${CUR}/${p}`.replace(/#/g, "%23");
+const LIST_ZH = { pending: "上架審核中", approved: "已上架", rejected: "未通過上架" }, LIST_B = { pending: "awaiting", approved: "approved", rejected: "rejected" };
+const fileUrl = p => `${BASE}/files/${CUR}/${p}`.replace(/#/g, "%23");
 
 async function init() {
   META = await api("/api/meta");
   $("#mode").textContent = META.mode === "mock" ? "MOCK（無 GPU 示範）" : "LOCAL GPU";
+  const me = META.me || {};
+  $("#me").innerHTML = META.auth === "cafeca" ? `<b>${esc(me.name)}</b>${me.admin ? ` <span class="badge b-approved">管理者</span>` : ""}
+    <a href="/">公開網站</a> · <a href="#" onclick="logout();return false">登出</a>` : `<b>本機操作者</b>`;
+  if (me.admin) { $("#nav-rv").hidden = false; refreshReviewCount(); } else if (META.auth === "cafeca") $("#f-auto-wrap").hidden = true;
   $("#toolcount").textContent = `${Object.keys(META.pipelines).length} 條製作管線 · ${META.tools} 種工具`;
   for (const [k, p] of Object.entries(META.pipelines)) $("#f-pipe").insertAdjacentHTML("beforeend", `<option value="${k}">${esc(p.title)}</option>`);
   $("#f-go").onclick = create;
   initMention();
   refreshList(); refreshGpu(); refreshActors(); setInterval(refreshGpu, 5000); setInterval(refreshList, 8000);
   const h = location.hash.slice(1);
-  if (h === "ads") goAds(); else if (h === "actors") goActors(); else if (h.startsWith("actor/")) openActor(h.slice(6)); else if (h) open(h);
+  if (h === "feedback") goFeedback(); else if (h === "review") goReview(); else if (h === "ads") goAds(); else if (h === "actors") goActors(); else if (h.startsWith("actor/")) openActor(h.slice(6)); else if (h) open(h);
   window.addEventListener("hashchange", () => {
     const k = location.hash.slice(1);
-    if (k === "ads") { if (VIEW !== "ads") goAds(); }
+    if (k === "feedback") { if (VIEW !== "feedback") goFeedback(); }
+    else if (k === "review") { if (VIEW !== "review") goReview(); }
+    else if (k === "ads") { if (VIEW !== "ads") goAds(); }
     else if (k === "actors" && VIEW !== "actors") goActors();
     else if (k.startsWith("actor/") && ACTOR?.id !== k.slice(6)) openActor(k.slice(6));
-    else if (k && !k.startsWith("actor") && (k !== CUR || VIEW !== "films")) open(k);
+    else if (k && !k.startsWith("actor") && !["feedback", "review"].includes(k) && (k !== CUR || VIEW !== "films")) open(k);
   });
 }
 async function refreshList() {
   const ps = await api("/api/projects");
   $("#plist").innerHTML = ps.map(p => `<div class="pitem ${p.id === CUR ? "on" : ""}" onclick="open('${p.id}')"><div class="t">${esc(p.title || p.id)}</div>
-    <div class="m"><span class="badge b-${p.status}">${p.status}</span> ${esc(META.pipelines[p.pipeline]?.title || p.pipeline)} · ${esc(STAGE_ZH[p.stage] || p.stage || "")}</div></div>`).join("");
+    <div class="m"><span class="badge b-${p.status}">${STATUS_ZH[p.status] || p.status}</span> ${p.listing ? `<span class="badge b-${LIST_B[p.listing] || ""}">${LIST_ZH[p.listing] || p.listing}</span> ` : ""}${esc(META.pipelines[p.pipeline]?.title || p.pipeline)} · ${esc(STAGE_ZH[p.stage] || p.stage || "")}${META.me?.admin && p.owner ? ` · <span title="${esc(p.owner)}">${esc(p.owner.slice(0, 8))}…</span>` : ""}</div></div>`).join("") || `<div class="m" style="color:var(--muted);padding:8px">還沒有影片。在上方寫一句話開始製作。</div>`;
 }
 async function refreshGpu() {
   try {
@@ -154,7 +175,7 @@ async function refreshGpu() {
       <div class="svc"><span>Midea 配置 ${g.resident_gb.toFixed(1)} / ${g.budget_gb.toFixed(1)} GB</span></div>` +
       (g.foreign_gb ? `<div class="svc" title="${esc((g.foreign || []).map(a => a.pid + " " + a.name).join(", "))}"><span style="color:var(--bad)">其他程式占用 ${g.foreign_gb} GB</span></div>` : "") +
       Object.entries(g.services).map(([n, s]) => `<div class="svc"><span><span class="dot ${s.running ? "on" : ""}"></span><b>${n}</b> ${esc(s.model || "")}</span>
-      <span>${s.vram_gb}GB${s.exclusive ? " ⓧ" : ""} <a href="#" onclick="svc('${n}','${s.running ? "stop" : "start"}');return false">${s.running ? "停止" : "啟動"}</a></span></div>`).join("");
+      <span>${s.vram_gb}GB${s.exclusive ? " ⓧ" : ""}${META.me?.admin ? ` <a href="#" onclick="svc('${n}','${s.running ? "stop" : "start"}');return false">${s.running ? "停止" : "啟動"}</a>` : ""}</span></div>`).join("");
   } catch (e) {}
 }
 async function svc(n, a) { await api(`/api/services/${n}/${a}`, { method: "POST" }); refreshGpu(); }
@@ -163,7 +184,7 @@ async function create() {
   $("#f-go").disabled = true;
   try {
     const media = [];
-    for (const f of $("#f-media").files) { const fd = new FormData(); fd.append("file", f); media.push((await (await fetch("/api/upload", { method: "POST", body: fd })).json()).path); }
+    for (const f of $("#f-media").files) { const fd = new FormData(); fd.append("file", f); { const r = await fetch(BASE + "/api/upload", { method: "POST", body: fd, headers: HDR }); if (!r.ok) throw new Error(await errText(r)); media.push((await r.json()).path); } }
     const body = { prompt, pipeline: $("#f-pipe").value, duration_s: +$("#f-dur").value, aspect: $("#f-aspect").value || null, language: $("#f-lang").value,
       real_only: $("#f-real").checked, reference_url: $("#f-ref").value.trim() || null, user_media: media, voice: $("#f-voice").value.trim() || null,
       music: $("#f-music").checked, subtitles: $("#f-subs").checked, auto_approve: $("#f-auto").checked,
@@ -177,7 +198,7 @@ async function open(id) {
   if (CUR !== id) { SEL.clear(); REGEN = {}; TAB = ""; }
   CUR = id; location.hash = id; refreshList();
   if (ES) ES.close();
-  ES = new EventSource(`/api/events/${id}`);
+  ES = new EventSource(`${BASE}/api/events/${id}`);
   let t = null; ES.onmessage = ev => { const e = JSON.parse(ev.data); clearTimeout(t); t = setTimeout(load, e.kind === "progress" ? 600 : 150); };
   load();
 }
@@ -332,7 +353,7 @@ function logTab() {
     <h2>GPU 用量</h2><div class="log">${(DATA.cost.lines || []).slice(-80).reverse().map(l => `${l.service} ${l.gpu_s}s → ${l.cost}`).join("<br>") || "—"}</div>`;
 }
 // ------------------------------------------------------------------ virtual actors
-function setView(v) { VIEW = v; $("#nav-films").classList.toggle("on", v === "films"); $("#nav-actors").classList.toggle("on", v === "actors" || v === "actor"); $("#nav-ads").classList.toggle("on", v === "ads"); }
+function setView(v) { VIEW = v; $("#nav-films").classList.toggle("on", v === "films"); $("#nav-actors").classList.toggle("on", v === "actors" || v === "actor"); $("#nav-ads").classList.toggle("on", v === "ads"); $("#nav-fb").classList.toggle("on", v === "feedback"); $("#nav-rv").classList.toggle("on", v === "review"); }
 function goFilms() { setView("films"); clearInterval(ACTOR_POLL); if (CUR) open(CUR); else { location.hash = ""; $("#main").innerHTML = `<div class="empty">選擇左側專案，或輸入一句話開始製作。</div>`; } }
 async function refreshActors() {
   try { ACTORS = await api("/api/actors"); $("#actor-count").textContent = ACTORS.length || ""; renderCastChips(); } catch (e) {}
@@ -341,16 +362,70 @@ async function goActors() {
   setView("actors"); clearInterval(ACTOR_POLL); if (ES) { ES.close(); ES = null; } location.hash = "actors"; ACTOR = null;
   await refreshActors();
   const busy = ACTORS.some(a => Object.values(a.jobs || {}).some(j => ["running", "queued"].includes(j.status)));
-  $("#main").innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:14px"><h1 style="margin:0">演員陣容 <small>${ACTORS.length} 位虛擬演員 · 在描述中輸入 @ 即可指定演出</small></h1></div>
+  const mineN = ACTORS.filter(a => a.mine).length, cap = META.limits?.actors || 3;
+  $("#main").innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:14px"><h1 style="margin:0">演員陣容 <small>${ACTORS.length} 位虛擬演員 · 平台演員大家都能指定，專屬演員只有建立者能用 · 在描述中輸入 @ 即可指定演出</small></h1></div>
     <div class="roster">${ACTORS.map(a => `<div class="acard" onclick="openActor('${a.id}')" ${a.intro ? `onmouseenter="const v=this.querySelector('video');v.hidden=false;v.play().catch(()=>{})" onmouseleave="const v=this.querySelector('video');v.pause();v.hidden=true"` : ""}>
       <div class="ph" style="background-image:url('${actorUrl(a.id, a.thumb)}')">${a.intro ? `<video src="${actorUrl(a.id, a.intro)}" muted loop playsinline preload="none" hidden style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>` : ""}
-      ${Object.values(a.jobs || {}).some(j => ["running", "queued"].includes(j.status)) ? `<span class="badge"><span class="spin"></span> 生成中</span>` : a.real_person ? `<span class="badge" title="以真人肖像 / 聲音授權建立">真人授權</span>` : ""}</div>
+      ${Object.values(a.jobs || {}).some(j => ["running", "queued"].includes(j.status)) ? `<span class="badge"><span class="spin"></span> 生成中</span>` : `<span class="badge">${a.mine ? "我的專屬演員" : a.owner ? "創作者演員" : "平台演員"}${a.listing === "pending" ? " · 上架審核中" : a.listing === "approved" && a.owner ? " · 已上架" : ""}</span>`}</div>
       <div class="bd"><div class="nm">${esc(a.name)}</div><div class="hd">@${esc(a.handle)}</div>
       <div class="mt">${a.age} 歲 · ${GENDER_ZH[a.gender] || ""}${a.occupation ? " · " + esc(a.occupation) : ""}</div>
       <div class="mt">${a.films ? `🎬 ${a.films} 部影片` : "尚未演出"} · ${a.intro ? "▶ 自我介紹" : a.look_approved ? "長相已確認" : a.thumb ? "待確認長相" : "尚無定妝照"}</div></div></div>`).join("")}
-      <div class="acard new" onclick="newActor()">＋ 新增演員</div></div>`;
+      ${META.me?.admin || mineN < cap ? `<div class="acard new" onclick="newActor()">＋ 建立專屬演員${META.me?.admin ? "" : `<br><small>${mineN} / ${cap}</small>`}</div>` : `<div class="acard new" style="cursor:default">已建立 ${mineN} / ${cap} 位專屬演員</div>`}</div>`;
   if (busy) ACTOR_POLL = setTimeout(() => VIEW === "actors" && !ACTOR && goActors(), 3000);
 }
+
+// ---- audience feedback on my works (/studio/api/feedback)
+const RX_ZH = { like: "喜歡", more: "想看更多這類", not_interested: "不感興趣" }, REASON_ZH = { topic: "主題不合", seen: "看過了", quality: "品質不好", other: "其他" };
+const LIVE_ZH = { like: "喜歡", beautiful: "美", funny: "好笑", moving: "感動", more: "想看更多" };
+async function goFeedback() {
+  setView("feedback"); clearInterval(ACTOR_POLL); if (ES) { ES.close(); ES = null; } location.hash = "feedback";
+  $("#main").innerHTML = `<h1>觀眾回饋</h1><div class="empty">載入中…</div>`;
+  let d; try { d = await api("/api/feedback"); } catch (e) { $("#main").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const pct = (a, b) => b ? Math.round(100 * a / b) + "%" : "—";
+  const works = d.works.map(w => {
+    const r = w.reactions, tot = (r.like || 0) + (r.more || 0) + (r.not_interested || 0);
+    const live = Object.entries(w.live).map(([k, n]) => `${LIVE_ZH[k] || k} ${n}`).join("、") || "—";
+    const reasons = Object.entries(w.not_interested_reasons).map(([k, n]) => `${REASON_ZH[k] || k} ${n}`).join("、");
+    return `<div class="card">${w.image ? `<img src="${w.image}" alt="">` : ""}
+      <div class="row" style="justify-content:space-between"><b style="flex:1">${esc(w.title || w.work)}</b><span class="badge b-${LIST_B[w.listing] || ""}" style="flex:0 0 auto">${LIST_ZH[w.listing] || "未上架"}</span></div>
+      <div class="stat"><div><b>${w.views.completed}</b><span>完整看完</span></div><div><b>${w.views.completed_7d}</b><span>近 7 天看完</span></div><div><b>${w.views.viewers}</b><span>觀眾</span></div><div><b>${w.favorites}</b><span>收藏</span></div></div>
+      <div class="bar" title="喜歡 / 想看更多 / 不感興趣">${tot ? `<i style="width:${100 * (r.like || 0) / tot}%;background:var(--amber)"></i><i style="width:${100 * (r.more || 0) / tot}%;background:var(--amber-text)"></i><i style="width:${100 * (r.not_interested || 0) / tot}%;background:var(--rank-down)"></i>` : ""}</div>
+      <div class="m" style="font-size:12px;color:var(--muted)">反應 ${tot} 個：喜歡 ${r.like || 0}（${pct(r.like || 0, tot)}）· 想看更多 ${r.more || 0} · 不感興趣 ${r.not_interested || 0}${reasons ? `（${esc(reasons)}）` : ""}</div>
+      <div class="m" style="font-size:12px;color:var(--muted)">直播即時反應：${esc(live)}${w.highlights.length ? ` · 觀眾最有反應的片段 ${w.highlights.map(h => Math.floor(h.start) + "–" + Math.ceil(h.end) + " 秒").join("、")}` : ""}</div>
+      ${w.href && w.listing === "approved" ? `<a href="${w.href}" target="_blank">在公開網站觀看</a>` : w.listing === "pending" ? `<span class="m" style="font-size:12px;color:var(--muted)">管理者核准後才會出現在公開網站</span>` : ""}</div>`;
+  }).join("") || `<div class="empty">還沒有完成的影片。完成並通過上架審核後，觀眾的反應會出現在這裡。</div>`;
+  const actors = d.actors.map(a => `<div class="card"><b>${esc(a.name)} @${esc(a.handle)}</b>
+      <div class="m" style="font-size:12px;color:var(--muted)">觀眾提問 ${a.questions} 題${a.listing === "pending" ? " · 演員上架審核中" : ""}</div>
+      ${a.top_questions.length ? `<table>${a.top_questions.map(q => `<tr><td>${esc(q.text)}</td><td style="width:70px;text-align:right">+1 ${q.supporters}</td></tr>`).join("")}</table>` : ""}
+      ${a.wishes.length ? `<div class="m" style="font-size:12px;color:var(--muted)">觀眾許願：${a.wishes.map(w => esc(w.text) + "（+1 " + w.supporters + "）").join("、")}</div>` : ""}</div>`).join("");
+  $("#main").innerHTML = `<h1>觀眾回饋 <small>你的作品在 Midea 上的觀看與反應</small></h1><div class="fb">${works}</div>
+    ${actors ? `<h2>我的演員收到的提問與許願</h2><div class="fb">${actors}</div>` : ""}`;
+}
+
+// ---- admin review queue (/studio/api/review)
+const RV_ZH = { listing: "上架審核", report: "檢舉", wish: "許願製作" };
+async function refreshReviewCount() { try { const r = await api("/api/review"); $("#rv-count").textContent = r.items.length || ""; } catch (e) {} }
+async function goReview() {
+  setView("review"); clearInterval(ACTOR_POLL); if (ES) { ES.close(); ES = null; } location.hash = "review";
+  let d; try { d = await api("/api/review"); } catch (e) { $("#main").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  $("#rv-count").textContent = d.items.length || "";
+  const acts = r => r.kind === "listing" ? [["approve", "核准上架", "primary"], ["reject", "退回", ""]]
+    : r.kind === "wish" ? [["approve", "核准製作", "primary"], ["reject", "暫不製作", ""]]
+    : [["violation", "確認違規（依次數處置）", "danger"], ["restore", "恢復顯示", ""]];
+  const body = r => r.kind === "listing" ? `${esc(r.summary)} · <a href="${r.detail.studio}">在後台打開</a>`
+    : r.kind === "wish" ? `${esc(r.detail.text)}（+1 ${r.detail.supporters}，合併 ${r.detail.merged} 個許願）`
+    : `「${esc(r.detail.text)}」<br><small style="color:var(--muted)">${esc(r.summary)} · 理由：${esc((r.detail.reasons || []).filter(Boolean).join("、") || "未填")} · 作者：${esc(r.detail.author_name || "")}（已違規 ${r.detail.strikes || 0} 次）</small>`;
+  $("#main").innerHTML = `<h1>審核 <small>上架申請、被檢舉的內容、達門檻的許願</small></h1>
+    <div class="rv">${d.items.map(r => `<div class="card"><div><span class="badge">${RV_ZH[r.kind] || r.kind}</span> ${body(r)}</div>
+      <div class="acts">${acts(r).map(([k, l, c]) => `<button class="${c}" onclick="decide(${r.id},'${k}')">${l}</button>`).join("")}</div></div>`).join("") || `<div class="empty">沒有待處理的項目。</div>`}</div>`;
+}
+async function decide(id, decision) {
+  const note = decision === "reject" ? prompt("退回原因（會給創作者看）", "") : "";
+  if (note === null) return;
+  try { await api(`/api/review/${id}`, { method: "POST", body: JSON.stringify({ decision, note }) }); } catch (e) { alert(e.message); }
+  goReview();
+}
+async function logout() { await fetch("/api/public/v1/auth/logout", { method: "POST", headers: HDR }); location.href = "/"; }
 
 // ---- create
 function newActor() {
@@ -428,7 +503,7 @@ async function uploadActorFiles(id, prefix) {
   for (const [kind, f] of [["portrait", photo], ["voice", voice]]) {
     if (!f) continue;
     const fd = new FormData(); fd.append("kind", kind); fd.append("consent", "true"); fd.append("note", $(`#${prefix}-note`).value); fd.append("file", f);
-    const r = await fetch(`/api/actors/${id}/upload`, { method: "POST", body: fd }); if (!r.ok) throw new Error(await r.text()); last = await r.json();
+    const r = await fetch(`${BASE}/api/actors/${id}/upload`, { method: "POST", body: fd, headers: HDR }); if (!r.ok) throw new Error(await r.text()); last = await r.json();
   }
   return last;
 }
@@ -534,11 +609,11 @@ function renderActor() {
     <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted)">上傳真人照片 / 聲音（需授權）</summary>${consentBlock("u")}<div style="margin-top:8px"><button onclick="uploadMore()">上傳</button></div></details>
     <h2>演出作品 <span class="badge">${films.length}</span></h2>
     ${films.length ? `<div class="films">${films.map(f => `<div class="film" onclick="open('${f.project}')">
-      ${f.thumb ? `<img class="t" src="/files/${f.project}/${f.thumb}">` : `<div class="t" style="aspect-ratio:16/9;background:#000;border-radius:3px"></div>`}
+      ${f.thumb ? `<img class="t" src="${BASE}/files/${f.project}/${f.thumb}">` : `<div class="t" style="aspect-ratio:16/9;background:#000;border-radius:3px"></div>`}
       <div><div style="font-size:15px">${esc(f.title)}</div>
         <div style="color:var(--muted);font-size:12px;margin:2px 0 4px"><span class="badge b-${f.status}">${STATUS_ZH[f.status] || f.status}</span> ${esc(META.pipelines[f.pipeline]?.title || f.pipeline)} · ${f.created ? new Date(f.created * 1000).toLocaleDateString() : ""} · <b style="color:var(--fg)">${f.role}</b> · ${f.scenes.filter(s => s.on_screen).length} 個鏡頭 · ${f.lines} 段台詞</div>
         <div style="font-size:12px;color:var(--muted)">${esc(f.prompt).slice(0, 120)}</div>
-        <div class="sc">${f.scenes.filter(s => s.thumb).slice(0, 10).map(s => `<img src="/files/${f.project}/${s.thumb}" title="${esc(s.id)} ${esc(s.narration)}">`).join("")}</div></div></div>`).join("")}</div>`
+        <div class="sc">${f.scenes.filter(s => s.thumb).slice(0, 10).map(s => `<img src="${BASE}/files/${f.project}/${s.thumb}" title="${esc(s.id)} ${esc(s.narration)}">`).join("")}</div></div></div>`).join("")}</div>`
       : `<div class="card" style="color:var(--muted)">還沒有演出作品。在影片描述中輸入 <b style="color:var(--accent)">@${esc(a.handle)}</b> 即可讓 ${esc(a.name)} 演出。</div>`}
   </div></div>`;
 }

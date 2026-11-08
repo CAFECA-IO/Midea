@@ -108,15 +108,17 @@
 
   /* ------------------------------------------------------------ shell */
   var NAV = [{ label: '首頁', href: '/' }, { label: '直播', href: '/live' }, { label: '節目表', href: '/schedule' },
-    { label: '主題', href: '/#topics' }, { label: '演員', href: '/#actors' }];
+    { label: '主題', href: '/#topics' }, { label: '演員', href: '/#actors' }, { label: '許願牆', href: '/wishes' }];
 
   function Account() {
     var v = useMe();
     if (v === undefined) return h('span', { style: { width: 120 } });
     if (!v) return h(M.SignInButton, { onClick: function () { openSignIn(); } });
     var kyc = v.kyc_level == null ? 'CAFECA 身分' : 'CAFECA 身分 · 驗證等級 ' + v.kyc_level;
-    return h(M.AccountMenu, { name: v.nickname, sub: kyc, items: [
+    return h(M.AccountMenu, { name: v.nickname, sub: kyc + (v.restriction ? ' · ' + v.restriction : ''), items: [
+      { label: '製作後台（我的演員與影片）', href: '/studio' },
       { label: '我的收藏', href: '/#favorites' },
+      { label: '修改暱稱', onClick: function () { askNickname(); } },
       { label: '登出', onClick: function () { api('/auth/logout', { method: 'POST' }).then(function () { setMe(null); }); } }] });
   }
 
@@ -133,11 +135,72 @@
         { label: '直播', href: '/live', icon: 'play', active: path === '/live' },
         { label: '節目表', href: '/schedule', icon: 'calendar', active: path === '/schedule' },
         { label: '主題', href: '/#topics', icon: 'grid' }] }),
-      h(SignIn));
+      h(SignIn), h(AskDialog));
   }
 
   function mount(App) {
     ReactDOM.createRoot(document.getElementById('root')).render(h(Shell, null, h(App)));
+    // /?signin=studio — the studio sends signed-out visitors here; after signing in they go back to /studio
+    if (new URLSearchParams(location.search).get('signin') === 'studio') {
+      api('/me').then(function (j) {
+        if (j.me) location.replace('/studio');
+        else openSignIn(function () { location.replace('/studio'); });
+      });
+    }
+  }
+
+  /* a small in-page dialog: text input or a choice list, styled like SignInDialog */
+  var ask = { open: null, subs: [] };
+  function askUser(cfg) {
+    return new Promise(function (ok) { ask.open = Object.assign({}, cfg, { done: ok }); ask.subs.forEach(function (f) { f(ask.open); }); });
+  }
+  function AskDialog() {
+    var _c = React.useState(null), c = _c[0], set = _c[1];
+    var _v = React.useState(''), val = _v[0], setVal = _v[1];
+    var ref = React.useRef(null);
+    React.useEffect(function () { ask.subs.push(function (x) { set(x); setVal(x && x.value || ''); }); }, []);
+    React.useEffect(function () { var d = ref.current; if (!d) return; if (c && !d.open) d.showModal(); if (!c && d.open) d.close(); }, [c]);
+    function end(v) { var f = c && c.done; set(null); if (f) f(v); }
+    return h('dialog', { ref: ref, className: 'md-dialog', 'aria-labelledby': 'ask-t', onCancel: function (e) { e.preventDefault(); end(null); } },
+      c ? h('form', { onSubmit: function (e) { e.preventDefault(); end(val.trim() || null); } },
+        h('div', { className: 'md-dialog-head' }, h('h2', { id: 'ask-t', className: 'md-dialog-title' }, c.title),
+          h('button', { type: 'button', className: 'md-iconbtn', 'aria-label': '關閉', onClick: function () { end(null); } }, h(M.Icon, { name: 'x', size: 18 }))),
+        c.body ? h('p', { className: 'md-dialog-body' }, c.body) : null,
+        c.choices ? h('div', { className: 'md-reactbar-opts', role: 'radiogroup', 'aria-label': c.title, style: { marginBottom: 16 } }, c.choices.map(function (x) {
+          return h('button', { key: x, type: 'button', role: 'radio', 'aria-checked': val === x ? 'true' : 'false', className: 'md-chip md-chip-sm' + (val === x ? ' is-on' : ''), onClick: function () { setVal(x); } }, x);
+        })) : h('input', { className: 'md-input', autoFocus: true, value: val, maxLength: c.max || 40, onChange: function (e) { setVal(e.target.value); }, style: { marginBottom: 16 } }),
+        h('div', { className: 'md-dialog-actions' }, h(M.Button, { type: 'submit', disabled: !val.trim() }, c.ok || '確定'), h(M.Button, { variant: 'ghost', onClick: function () { end(null); } }, '取消'))) : null);
+  }
+
+  /* 公開暱稱：first time someone writes, or from the account menu */
+  function askNickname(then) {
+    var cur = me.value && me.value.nickname || '';
+    return askUser({ title: '設定公開暱稱', body: '在聊天室、許願牆與提問時顯示。2–16 字，不能用演員姓名、@代號、「Midea」或「官方」。', value: cur, max: 16, ok: '儲存' }).then(function (n) {
+      if (n === null) return false;
+      return api('/me/nickname', { method: 'POST', body: { nickname: n } }).then(function (j) {
+      setMe(Object.assign({}, me.value, { nickname: j.nickname, has_nickname: true })); if (then) then(); return true;
+      }).catch(function (e) { toast(e.message); return false; });
+    });
+  }
+  /* writing (chat, wishes, questions): signed in, has a nickname, not muted */
+  function requireWriter(fn) {
+    requireLogin(function () {
+      var v = me.value;
+      if (v && v.restriction) return toast(v.restriction);
+      if (v && !v.has_nickname) return askNickname(fn);
+      fn();
+    });
+  }
+  var REPORT_REASONS = ['騷擾', '仇恨', '色情', '個資', '廣告', '真實人物', '其他'];
+  function report(kind, id) {
+    requireLogin(function () {
+      askUser({ title: '檢舉這則內容', body: '被 3 位不同的觀眾檢舉就會先隱藏，再由管理者處理。', choices: REPORT_REASONS, ok: '送出檢舉' }).then(function (r) {
+      if (r === null) return;
+      api('/reports', { method: 'POST', body: { kind: kind, id: id, reason: r } })
+        .then(function (j) { toast(j.hidden ? '已檢舉，這則內容已先隱藏，等待管理者處理' : '已檢舉，謝謝你'); })
+        .catch(function (e) { toast(e.message); });
+      });
+    });
   }
 
   /* ------------------------------------------------------------ helpers */
@@ -174,6 +237,6 @@
     setTimeout(function () { el.remove(); }, 3000);
   }
 
-  window.Site = { toast: toast, api: api, useMe: useMe, setMe: setMe, openSignIn: openSignIn, requireLogin: requireLogin, mount: mount,
+  window.Site = { askNickname: askNickname, requireWriter: requireWriter, report: report, toast: toast, api: api, useMe: useMe, setMe: setMe, openSignIn: openSignIn, requireLogin: requireLogin, mount: mount,
     cast: cast, videoLine: videoLine, viewTracker: viewTracker, share: share, finishLogin: finish };
 })();

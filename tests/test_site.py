@@ -50,6 +50,8 @@ def site(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     with TestClient(app_mod.app) as c:
         yield c, app_mod
+    from midea.web import app as board
+    board.AUTH.update(mode="basic", resolve=None)      # the standalone board keeps HTTP Basic
 
 
 def _login(c, handle="alice", kyc=None):
@@ -240,3 +242,139 @@ def test_cafeca_verify_checks(monkeypatch):
     # claims the user did not approve are not used
     r = res(nonce="n6", m={"claims": ""})
     assert cafeca.verify(r, origin="https://midea.cafeca.io", nonce_ok=nonce_ok)["kyc_level"] is None
+
+
+# ------------------------------------------------------------------------------------------------ phase 2 + studio
+def _user(c, handle, kyc=1, nick=None):
+    from fastapi.testclient import TestClient
+    u = TestClient(c.app)
+    _login(u, handle, kyc)
+    if nick:
+        assert u.post("/api/public/v1/me/nickname", json={"nickname": nick}, headers=H).status_code == 200
+    return u
+
+
+def test_chat_rules_rate_and_nickname(site):
+    c, m = site
+    u = _user(c, "chatter", nick="小魚")
+    r = u.post("/api/public/v1/live/chat", json={"text": "晚安"}, headers=H).json()
+    assert r["status"] == "shown"
+    assert u.post("/api/public/v1/live/chat", json={"text": "再一則"}, headers=H).status_code == 429     # 每 5 秒 1 則
+    m.st().com._last_chat.clear()
+    r = u.post("/api/public/v1/live/chat", json={"text": "加 line 領優惠 0912-345-678"}, headers=H).json()
+    assert r["status"] == "rejected" and r["reason"] in ("個資", "廣告")
+    assert u.post("/api/public/v1/live/chat", json={"text": "x" * 101}, headers=H).status_code == 400
+    for bad in ("Midea 小編", "官方帳號", "@yuqing", "a", "智障"):
+        assert u.post("/api/public/v1/me/nickname", json={"nickname": bad}, headers=H).status_code == 400
+    msgs = c.get("/api/public/v1/live/chat").json()["messages"]
+    assert [x["text"] for x in msgs] == ["晚安"] and msgs[0]["nickname"] == "小魚"
+
+
+def test_wishes_merge_threshold_and_weekly_limit(site, monkeypatch):
+    c, m = site
+    from midea import config
+    monkeypatch.setitem(config.settings().raw.setdefault("site", {}), "wish_threshold", 3)
+    a, b, d = _user(c, "w1"), _user(c, "w2"), _user(c, "w3")
+    assert a.post("/api/public/v1/wishes", json={"kind": "topic", "text": "下雨天的城市"}, headers=H).json()["merged"] is False
+    r = b.post("/api/public/v1/wishes", json={"kind": "topic", "text": "雨天的城市街景"}, headers=H).json()
+    assert r["merged"] is True                                           # 相近的許願合併成同一張卡
+    card = r["card"]
+    assert d.post(f"/api/public/v1/wishes/{card}/support", headers=H).json()["supporters"] == 3
+    assert m.st().store.one("SELECT * FROM review WHERE kind='wish'")["target"] == str(card)   # 達門檻 → 待核准製作
+    for t in ("夜班", "清晨"):
+        a.post("/api/public/v1/wishes", json={"kind": "topic", "text": t + "的工作"}, headers=H)
+    assert a.post("/api/public/v1/wishes", json={"kind": "topic", "text": "第四個"}, headers=H).status_code == 429
+    assert a.post("/api/public/v1/wishes", json={"kind": "topic", "text": "https://spam.example"}, headers=H).status_code in (400, 429)
+
+
+def test_reports_hide_and_penalties_escalate(site):
+    c, m = site
+    s = m.st()
+    author = _user(c, "author", nick="作者")
+    for k in range(3):
+        s.com._last_chat.clear()
+        author.post("/api/public/v1/live/chat", json={"text": f"訊息 {k}"}, headers=H)
+    ids = [r["id"] for r in s.store.q("SELECT id FROM chat ORDER BY id")]
+    viewer_id = s.store.one("SELECT viewer FROM chat WHERE id=?", (ids[0],))["viewer"]
+    for i, cid in enumerate(ids):
+        for j in range(3):
+            _user(c, f"rep{i}{j}").post("/api/public/v1/reports", json={"kind": "chat", "id": cid, "reason": "騷擾"}, headers=H)
+        assert s.store.one("SELECT status FROM chat WHERE id=?", (cid,))["status"] == "hidden"      # 3 個不同身分 → 隱藏
+        rv = s.store.one("SELECT id FROM review WHERE target=?", (f"chat:{cid}",))["id"]
+        out = s.com.resolve(rv, "violation", by="admin")
+        assert out["penalty"]["level"] == ["warning", "mute", "ban"][i]
+    v = s.store.one("SELECT * FROM viewer WHERE id=?", (viewer_id,))
+    assert v["banned_until"] > time.time() + 29 * 86400
+    assert c.get("/api/public/v1/live/chat").json()["messages"] == []
+
+
+def test_questions_reply_only_to_asker(site):
+    c, m = site
+    s = m.st()
+    from midea.site.community import Worker
+    asker, other = _user(c, "asker", nick="提問者"), _user(c, "other", nick="路人")
+    s.com.s.db.execute("INSERT OR IGNORE INTO viewer(kind, account, handle, created) VALUES('cafeca','0x1','x',0)")
+    w = Worker(s.com, lambda hd: {"name": "林予晴", "handle": hd})
+    s.com.ask(s.store.one("SELECT * FROM viewer WHERE handle='asker'"), "yuqing", "你第一次自己煮的咖啡是什麼味道？")
+    w.run_once()      # AI moderation (mock: clean)
+    w.run_once()      # text reply
+    mine = s.com.questions("yuqing", s.store.one("SELECT id FROM viewer WHERE handle='asker'")["id"])[0]
+    theirs = s.com.questions("yuqing", s.store.one("SELECT id FROM viewer WHERE handle='other'")["id"])[0]
+    assert mine["reply"] and theirs["reply"] is None                  # 只有提問者看得到
+    for _ in range(2):
+        s.com.ask(s.store.one("SELECT * FROM viewer WHERE handle='asker'"), "yuqing", "還有一題")
+    with pytest.raises(OverflowError):
+        s.com.ask(s.store.one("SELECT * FROM viewer WHERE handle='asker'"), "yuqing", "第四題")
+
+
+def test_studio_isolation_and_guards(site):
+    c, m = site
+    alice, bob = _user(c, "alice"), _user(c, "bob")
+    assert c.get("/studio/", follow_redirects=False).status_code in (302, 307)
+    assert alice.get("/studio/api/meta").json()["me"]["admin"] is False
+    assert alice.post("/studio/api/projects", json={"prompt": "x", "user_media": ["/etc/passwd"]}, headers=H).status_code == 400
+    assert alice.post("/studio/api/ads", json={"lead": "x", "product_url": "http://127.0.0.1:8780/"}, headers=H).status_code == 400
+    assert alice.post("/studio/api/projects", json={"prompt": "x"}).status_code == 403                    # X-Midea header
+    from midea.project import Project
+    p = Project.create({"prompt": "alice 的片"}, "cinematic", owner=alice.get("/studio/api/meta").json()["me"]["account"])
+    assert [x["id"] for x in alice.get("/studio/api/projects").json()] == [p.id]
+    assert bob.get("/studio/api/projects").json() == []
+    assert bob.get(f"/studio/api/projects/{p.id}").status_code == 404
+    assert bob.get(f"/studio/files/{p.id}/project.json").status_code == 404
+    assert bob.post("/studio/api/services/qwen/stop", headers=H).status_code == 403
+
+
+def test_creator_work_needs_listing_review(site):
+    c, m = site
+    s = m.st()
+    alice = _user(c, "alice2")
+    acct = alice.get("/studio/api/meta").json()["me"]["account"]
+    ws = Path(os.environ["MIDEA_WORKSPACE"])
+    d = ws / "20261105-000000-eeeeee"
+    _video(d / "final" / "創作者.mp4")
+    (d / "stages").mkdir(parents=True)
+    (d / "stages" / "publish.json").write_text("{}")
+    (d / "project.json").write_text(json.dumps({"id": d.name, "owner": acct, "created": time.time(), "pipeline": "cinematic",
+        "status": "done", "brief": {"prompt": "創作者"}, "deliverables": {"items": [{"video": "final/創作者.mp4"}]}}), encoding="utf-8")
+    from midea.site import studio
+    assert studio.queue_listings(s) == 1
+    titles = {v.title for v in s.cat.refresh(force=True).videos.values()}
+    assert "創作者" not in titles                                              # 上架審核前不出現在公開網站
+    s.com.grant_admin(acct)
+    admin = alice
+    items = admin.get("/studio/api/review").json()["items"]
+    rid = next(i["id"] for i in items if i["kind"] == "listing")
+    s.com.s.db.execute("DELETE FROM role")                                    # review as another admin
+    boss = _user(c, "boss")
+    s.com.grant_admin("boss")
+    assert boss.post(f"/studio/api/review/{rid}", json={"decision": "approve"}, headers=H).status_code == 200
+    assert "創作者" in {v.title for v in s.cat.refresh(force=True).videos.values()}
+    fb = alice.get("/studio/api/feedback").json()
+    assert fb["works"][0]["listing"] == "approved"
+
+
+def test_clean_thumbnail_avoids_text():
+    from midea.tools.video import clean_frame_time
+    t = clean_frame_time(60, [(0, 3.5), (54, 60), (10, 20), (22, 40), (41, 50)])
+    assert 9 <= t <= 10 or 20 <= t <= 22 or 50 <= t <= 51
+    assert clean_frame_time(10, [(0, 10)]) == pytest.approx(5)

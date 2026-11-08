@@ -2,7 +2,7 @@ import type * as React from 'react';
 
 export type IconName = 'search' | 'play' | 'key' | 'sound-off' | 'arrow-right' | 'chevron-right'
   | 'heart' | 'sparkle' | 'smile' | 'tear' | 'plus' | 'x' | 'bookmark' | 'share' | 'eye' | 'people' | 'sound' | 'expand'
-  | 'home' | 'calendar' | 'grid' | 'user' | 'check';
+  | 'home' | 'calendar' | 'grid' | 'user' | 'check' | 'flag' | 'send' | 'chat' | 'star';
 export type Move = 'new' | 'up' | 'down' | 'same';
 
 export interface LogoProps { size?: number; mark?: boolean; href?: string }
@@ -117,12 +117,49 @@ export declare function Skeleton(props: SkeletonProps): React.ReactElement;
 export interface EmptyStateProps { title: string; body?: string; action?: React.ReactNode; cols?: 1 | 2 | 3 | 4; rows?: 1 | 2 }
 export declare function EmptyState(props: EmptyStateProps): React.ReactElement;
 
-export interface TopicBentoProps { title: string; id?: string; tag?: string; tagNode?: React.ReactNode; meta?: string; level?: 2 | 3;
+export interface TopicBentoProps { title: string; id?: string; tag?: string; tagNode?: React.ReactNode; meta?: string; action?: React.ReactNode; level?: 2 | 3;
   videos: { image: string; title: string; subtitle?: string; href?: string; alt?: string; focus?: 'top' | string | null }[] }
 export declare function TopicBento(props: TopicBentoProps): React.ReactElement;
 
 export interface BottomNavProps { items: { label: string; href: string; icon: IconName; active?: boolean }[]; label?: string }
 export declare function BottomNav(props: BottomNavProps): React.ReactElement;
+
+/* ---- v3: community (phase 2) and schedule / topic pages ---- */
+export interface ChatMessage { id: number; nickname: string; text: string; at?: number }
+export interface ChatPanelProps { title: string; messages: ChatMessage[]; onSend?: (text: string) => Promise<boolean> | boolean | void;
+  meta?: string | null; pinned?: string | null; pinnedLabel?: string; onReport?: (m: ChatMessage) => void; reportLabel?: string;
+  signedIn?: boolean; onSignIn?: () => void; signInLabel?: string; placeholder?: string; inputLabel?: string; sendLabel?: string;
+  max?: number; disabled?: boolean; notice?: string; hint?: string; composer?: boolean; collapseLabel?: string; expandLabel?: string; defaultOpen?: boolean }
+export declare function ChatPanel(props: ChatPanelProps): React.ReactElement;
+
+export interface WishCardProps { kindLabel: string; text: string; status: 'open' | 'topic' | 'producing' | 'done'; statusLabel?: string;
+  progress: number; progressLabel?: string; countLabel: string; note?: string | null; supported?: boolean; supportLabel: string;
+  supportedLabel: string; onSupport?: () => void; onReport?: () => void; reportLabel?: string }
+export declare function WishCard(props: WishCardProps): React.ReactElement;
+
+export interface WishComposerProps { title: string; actors: { handle: string; name: string; image: string }[]; onSubmit?: (w: { kind: 'topic' | 'cast'; text: string; actors: string[] }) => Promise<boolean> | boolean | void;
+  left?: number | null; leftLabel?: string; kindLabel?: string; topicLabel: string; castLabel: string; castPick?: string;
+  topicTextLabel: string; topicPlaceholder?: string; castTextLabel: string; castPlaceholder?: string; rules?: string; footer?: string;
+  submitLabel: string; disabled?: boolean; max?: number }
+export declare function WishComposer(props: WishComposerProps): React.ReactElement;
+
+export interface AskActorProps { title: string; onAsk?: (text: string) => Promise<boolean> | boolean | void; inputLabel: string; placeholder?: string;
+  leftLabel?: string; footer?: string; signedIn?: boolean; onSignIn?: () => void; submitLabel: string; disabled?: boolean; max?: number;
+  replies?: { id: number; question: string; reply: string | null }[]; avatar?: string; actorName: string; aiLabel: string;
+  youAskedLabel?: string; pendingLabel?: string; replyNote?: string }
+export declare function AskActor(props: AskActorProps): React.ReactElement;
+
+export interface AnswerTileProps { image: string; question: string; meta?: string; href?: string; aiLabel: string; cols?: 1 | 2; rows?: 1 | 2 }
+export declare function AnswerTile(props: AnswerTileProps): React.ReactElement;
+
+export interface TopicHeaderProps { title: string; eyebrow?: string; meta?: string; tags?: React.ReactNode[] }
+export declare function TopicHeader(props: TopicHeaderProps): React.ReactElement;
+
+export interface ScheduleSlot { id: string; range: string; title: string; meta: string; now?: boolean; href?: string; tag?: React.ReactNode }
+export interface ScheduleDayProps { label: string; slots: ScheduleSlot[]; today?: boolean; nowLabel?: string }
+export declare function ScheduleDay(props: ScheduleDayProps): React.ReactElement;
+export interface ScheduleWeekProps { days: { label: string; today?: boolean; slots: ScheduleSlot[] }[]; nowLabel?: string }
+export declare function ScheduleWeek(props: ScheduleWeekProps): React.ReactElement;
 
 declare global { interface Window { Midea: { Logo: typeof Logo; Icon: typeof Icon; Button: typeof Button; SignInButton: typeof SignInButton;
   SearchField: typeof SearchField; SegmentedTabs: typeof SegmentedTabs; SiteHeader: typeof SiteHeader; SiteFooter: typeof SiteFooter;
@@ -131,4 +168,6 @@ declare global { interface Window { Midea: { Logo: typeof Logo; Icon: typeof Ico
   ActorCard: typeof ActorCard; InfluenceTag: typeof InfluenceTag; ViewerCount: typeof ViewerCount; ReactionBar: typeof ReactionBar;
   LiveReactions: typeof LiveReactions; PollCard: typeof PollCard; LivePlayer: typeof LivePlayer; VideoPlayer: typeof VideoPlayer;
   VideoMeta: typeof VideoMeta; AIDisclosure: typeof AIDisclosure; SignInDialog: typeof SignInDialog; AccountMenu: typeof AccountMenu;
-  Skeleton: typeof Skeleton; EmptyState: typeof EmptyState; TopicBento: typeof TopicBento; BottomNav: typeof BottomNav } } }
+  Skeleton: typeof Skeleton; EmptyState: typeof EmptyState; TopicBento: typeof TopicBento; BottomNav: typeof BottomNav;
+  ChatPanel: typeof ChatPanel; WishCard: typeof WishCard; WishComposer: typeof WishComposer; AskActor: typeof AskActor; AnswerTile: typeof AnswerTile;
+  TopicHeader: typeof TopicHeader; ScheduleDay: typeof ScheduleDay; ScheduleWeek: typeof ScheduleWeek } } }

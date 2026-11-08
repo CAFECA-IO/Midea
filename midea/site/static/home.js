@@ -115,8 +115,9 @@
     var ts = (p.d.topics || []).slice(0, 3);
     if (!ts.length) return null;
     return h('section', { className: 'sec', id: 'topics', 'aria-label': '依興趣的主題' }, ts.map(function (t, i) {
-      return h(M.TopicBento, { key: t.key, id: 'topic-' + i, title: t.title, meta: t.meta, level: 2,
-        tagNode: t.personal ? h(M.Tag, null, t.reason) : (t.reason ? h(M.Tag, null, t.reason) : null),
+      return h(M.TopicBento, { key: t.key, id: 'topic-' + i, title: t.title, level: 2,
+        action: h('a', { href: '/topic/' + encodeURIComponent(t.key), className: 'md-nav-a md-meta' }, t.meta + ' · 看全部'),
+        tagNode: t.influence ? h(M.InfluenceTag, null, t.influence) : (t.reason ? h(M.Tag, null, t.reason) : null),
         videos: t.videos.map(function (v) { return { image: v.image, title: v.title, subtitle: S.videoLine(v), href: '/watch/' + v.id, focus: v.aspect === '4:5' ? 'top' : null }; }) });
     }));
   }
@@ -128,11 +129,24 @@
       h(M.SectionHeader, { id: 'cast', title: '平台演員', meta: '演員皆為虛擬角色' }),
       h('div', { className: 'actors' }, as.map(function (a) {
         return h(M.ActorCard, { key: a.handle, image: a.image, name: a.name, handle: a.handle, role: a.role,
-          works: a.works ? a.works + ' 部作品' : '自我介紹', href: a.intro ? '/watch/' + a.intro : '#' });
+          works: (a.works ? a.works + ' 部作品' : '自我介紹') + ' · 提問', href: '/actor/' + a.handle });
       }).concat(me ? [] : [h('div', { key: 'signin', className: 'signin-card' },
         h('b', null, '登入後，主題會依你的觀看歸納'),
         h('p', null, '以 CAFECA 登入：用裝置上的通行金鑰，不需要密碼、不必另外註冊。登入後可以收藏、參加「觀眾決定」投票，主題與觀看紀錄跨裝置同步。'),
         h(M.SignInButton, { variant: 'outline', onClick: function () { S.openSignIn(); } }))])));
+  }
+
+  /* 許願牆（主題之後、平台演員之前）：依 +1 數前 6 張 */
+  function WishWall() {
+    var _d = React.useState(null), d = _d[0], set = _d[1], me = S.useMe();
+    function load() { S.api('/wishes').then(set).catch(function () {}); }
+    React.useEffect(load, [me && me.account]);
+    if (!d) return null;
+    var names = {}; d.actors.forEach(function (a) { names[a.handle] = a.name; });
+    return h('section', { className: 'sec', id: 'wishes', 'aria-labelledby': 'wish-h' },
+      h(M.SectionHeader, { id: 'wish-h', title: '許願牆', tag: '+1 達 ' + d.threshold + ' 就排進製作', action: h(M.Button, { variant: 'secondary', href: '/wishes' }, '我要許願') }),
+      d.cards.length ? h('div', { className: 'home-wishes' }, d.cards.slice(0, 6).map(function (c) { return h(M.WishCard, window.WishCardProps(c, load, names)); }))
+        : h(M.EmptyState, { title: '還沒有人許願', body: '想看什麼主題、哪兩位演員一起演，寫下來讓大家 +1。', action: h(M.Button, { variant: 'secondary', href: '/wishes' }, '我要許願') }));
   }
 
   function Favorites() {
@@ -154,7 +168,7 @@
     function onPoll(poll) { set(Object.assign({}, d, { poll: poll })); }
     return h(React.Fragment, null,
       h('h1', { className: 'md-sr' }, 'Midea 首頁'),
-      h(Hero, { d: d, onPoll: onPoll }), h(Nightly, { d: d }), h(Ranking, { d: d }), h(Topics, { d: d }), h(Favorites), h(Actors, { d: d }));
+      h(Hero, { d: d, onPoll: onPoll }), h(Nightly, { d: d }), h(Ranking, { d: d }), h(Topics, { d: d }), h(WishWall), h(Favorites), h(Actors, { d: d }));
   }
 
   S.mount(Home);

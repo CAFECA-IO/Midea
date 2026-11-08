@@ -258,10 +258,12 @@ python -m midea services status                          # 查看 VRAM 配置
 
 觀眾端的網站與分鏡看板分開跑：`midea site`（預設 127.0.0.1:10030，前面接 HTTPS 反向代理；伺服器上 https://midea.cafeca.io 已接到這個 port）。它只讀取已發佈的專案（`final/` 裡的成片與縮圖）和已通過驗收的演員自我介紹，不碰製作流程。
 
-- **頁面**：首頁（A3 拼貼）、直播 `/live`、影片 `/watch/{id}`、節目表 `/schedule`，全部用 `docs/design-system/` 的 token 與元件。
+- **頁面**：首頁（A3 拼貼）、直播 `/live`、影片 `/watch/{id}`、節目表 `/schedule`、主題 `/topic/{key}`、演員 `/actor/{handle}`、許願牆 `/wishes`，全部用 `docs/design-system/` 的 token 與元件。
 - **官方頻道**：每週一 09:00 排好下一週（每天 48 個 30 分鐘時段，20:00–24:00 是主打）；週六 21:30 是「觀眾決定」時段，週一到週四投票。主題每 6 小時重新歸納；最多人看只算完整看完的次數，每小時更新。
 - **觀眾互動（第一期）**：影片反應（喜歡／想看更多這類／不感興趣，免登入）、收藏、分享、直播即時反應與「N 人正在看」、時段結束的「下週還想看嗎」、觀眾決定投票。反應、投票與時段投票直接影響主題、推薦與下週排程，畫面上用固定寫法標出原因（「觀眾投票選出」「觀眾想再看」「觀眾最有反應的片段」）。直播反應的峰值會寫進專案的 `audience/highlights.json`，供剪 15 秒版參考。
 - **登入**：只用 CAFECA（通行金鑰，免密碼）。後端自己驗 EIP-712 簽章（ERC-1271 `isValidSignature`），帳戶地址是觀眾的 id；投票不要求 KYC 等級，但結果依等級分開統計。登入只能在設定的網域（`site.origin`）上完成。
+- **觀眾互動（第二期）**：直播聊天室、許願牆（AI 合併相近的願望，+1 達 30 送管理者核准製作；平台已有相關影片的會成為主題，標「依觀眾許願」）、演員頁提問（演員以 AI 寫第一人稱文字回覆，標「AI 生成 · 虛擬演員」，只有提問者看得到）、檢舉（3 位不同觀眾檢舉就先隱藏）與處置（提醒 → 禁言 24 小時 → 停權 30 天）。所有文字先過規則審核，再由背景的 Qwen 複查。
+- **製作後台 `/studio`**：原本的分鏡看板改成以 CAFECA 登入的後台。每個人只看得到自己的影片與專屬演員（平台演員大家都能指定，專屬演員只有建立者能用），每人最多 3 位專屬演員、同時 1 支影片在製作；完成的影片與演員要經管理者「上架審核」才會出現在公開網站。「觀眾回饋」分頁列出自己作品的看完數、反應、收藏、直播反應峰值，以及演員收到的提問與許願。管理者另有「審核」分頁（上架申請、檢舉、達門檻的許願）與 GPU 服務控制；用 `midea site admin <CAFECA 代號>` 指定管理者。
 - **資料**：SQLite（`<workspace>/_site/site.db`）、節目表與主題 JSON；API 在 `/api/public/v1`。完整規劃見專案文件「觀眾反饋與互動功能規劃」。
 
 ## 伺服器部署
@@ -292,11 +294,14 @@ midea/
   qa.py  cost.py  project.py         自我審核、成本模型、專案儲存／事件／關卡決定
   web/                               FastAPI + SSE 分鏡看板（HTTP Basic 登入）
   site/                              公開網站：catalog（已發佈作品）programming（節目表、主題、排行、投票）
-                                     live（即時反應、同時在看）cafeca（登入驗簽）store（SQLite）static（頁面）
+                                     live（即時反應、同時在看）community（聊天、許願、提問、檢舉、審核）
+                                     studio（/studio 後台：CAFECA 身分、上架審核、觀眾回饋）cafeca（登入驗簽）store static
+  web/access.py                      後台的身分、擁有者、上傳與網址檢查
 pipeline_defs/*.yaml                 13 條管線定義（階段、關卡、風格預設）
 workflows/                           MiniMax H3 ComfyUI API workflow（自行匯出）
 scripts/gen_readme_diagrams.py       產生本文件的 SVG 圖（docs/images/）
 scripts/gen_tokens_css.py            由 docs/design-system/tokens.json 產生 tokens.css
+scripts/refresh_thumbnails.py        重新挑選已發佈影片的縮圖（避開字幕、字卡與片頭片尾）
 docs/design-system/                  網站設計系統：設計語言、版面、元件規劃、token、元件
 ```
 

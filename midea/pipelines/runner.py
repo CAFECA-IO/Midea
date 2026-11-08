@@ -843,6 +843,9 @@ class Runner:
         outs = comp.get("outputs") or [comp]
         return {"final": outs[0]["master"], "qa": qa_rep["status"], "pending_approval": True}
 
+    def _text_windows(self, output: dict) -> list[tuple[float, float]]:   # hook: extra on-screen text (ads: supers)
+        return []
+
     def _title(self) -> str:                      # hook: deliverable name
         return (self.p.stage_data("proposal") or {}).get("title") or self.p.id
 
@@ -864,7 +867,11 @@ class Runner:
                     shutil.copy(self.p.dir / c[k], t)
                     item[k] = self.p.rel(t)
             th = self.p.path("final", f"{name}.jpg")
-            vt.thumbnail(str(dst), str(th))
+            try:                                   # a frame without subtitles, supers or the title card
+                vt.clean_thumbnail(str(dst), str(th), srt=str(self.p.dir / item["srt"]) if item.get("srt") else None,
+                                   extra=self._text_windows(c))
+            except Exception:  # noqa: BLE001
+                vt.thumbnail(str(dst), str(th))
             item["thumbnail"] = self.p.rel(th)
             deliver.append(item)
         credits = (self.p.stage_data("assets") or {}).get("credits") or []

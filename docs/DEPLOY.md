@@ -22,7 +22,7 @@ Midea 部署在 `borg@211.22.118.147:/workspace/midea`。所有東西（程式�
 | 服務 | Port | 備註 |
 |---|---|---|
 | 公開網站 `midea site` | 10030 | tmux `midea-site`（`app/run_site.sh`）；https://midea.cafeca.io 的反向代理接到這裡（CAFECA 登入只在該網域有效） |
-| 看板 | 停用 | 2026-11-08 讓出 10030 給公開網站。需要時改用別的 port：`./run_board.sh` 的 `--port` 改成例如 10032（綁外網時仍需 `MIDEA_BOARD_PASSWORD`） |
+| 製作後台 | 10030 的 `/studio` | 原本的看板掛在公開網站下，以 CAFECA 登入（2026-11-08）。獨立的 `midea serve`（HTTP Basic）只在需要時開在別的 port，例如 10032 |
 | Qwen3.8-Flash-Next | **8080（Strata，外部）** | 由 root 的 Strata 提供，Midea 只連線，不負責啟停 |
 | ComfyUI + MiniMax H3 | 8781 | 獨佔 GPU |
 | VoxCPM2 | 8782 | |
@@ -211,3 +211,11 @@ Strata 用 `strata-iq3_s-local.json` 啟動時，會把專家快取塞滿 GPU，
 - 設定：`config.yaml` 的 `site:`；`MIDEA_SITE_ORIGIN` 必須和瀏覽器網址完全相同（含 https），否則 CAFECA 登入會被拒絕。
 - 資料：`projects/_site/`（`site.db`、`schedule/`、`topics.json`）。立即重排：`../venv/bin/python -m midea site plan-week`。
 - 本機測試可設 `MIDEA_SITE_DEV_LOGIN=1` 開啟假的登入（`POST /api/public/v1/auth/dev`）；正式環境不要開。
+
+## 製作後台 /studio 與觀眾互動第二期（2026-11-08）
+
+- 網址：https://midea.cafeca.io/studio 。未登入會轉到首頁並打開「以 CAFECA 登入」，登入後回到後台。
+- 管理者：`../venv/bin/python -m midea site admin <CAFECA 代號或帳戶地址>`（對方要先登入網站一次）；不帶參數列出管理者。也可以在 `config.yaml` 的 `site.admins` 寫帳戶地址。
+- 管理者才能：啟停 GPU 服務、自動通過關卡、核准上架、處理檢舉、核准許願製作。
+- 背景工作（網站行程內）：每 30 秒用 Qwen 複查新的聊天、許願、提問並寫演員的文字回覆；每分鐘把創作者完成的影片與演員送進上架審核。Qwen 與製作共用 GPU，忙的時候會排隊。
+- 舊影片縮圖帶字卡時：`../venv/bin/python scripts/refresh_thumbnails.py`（舊圖保留為 `*.old.jpg`）。

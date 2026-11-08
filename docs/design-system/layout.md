@@ -23,8 +23,8 @@
 3. **本週每晚的主打時段**：7 個 `DaySlot`，今天加外框；觀眾影響的時段加 `InfluenceTag`。
 4. **最多人看**（`row-rank`）：`SegmentedTabs`（今天／本週／本月），第 1 名 2×2 `RankTile`，第 2–5 名 1×1，第 6–10 名一列 `RankRow`。
 5. **依興趣的主題**（`row-topic`）：每個主題一塊 Bento，主打片 2×2 + 4 部 1×1；標題旁 `Tag` 寫推薦理由，右側 `meta` 寫歸納時間與部數。最多 3 個主題，其餘進「主題」頁。
-6. **許願牆**（第二期起）：依 +1 數前 6 張 `WishCard` 與「我要許願」，放在主題之後、平台演員之前。
-7. **平台演員**：`ActorCard` 網格，最後一格是登入說明（未登入時）；第二期起演員卡加「向他提問」。
+6. **許願牆**：依 +1 數前 6 張 `WishCard` 與「我要許願」（連到 /wishes），放在主題之後、平台演員之前。
+7. **平台演員**：`ActorCard` 網格，連到演員頁（可提問），最後一格是登入說明（未登入時）。
 8. **頁尾** `SiteFooter`。手機另有 `BottomNav`。
 
 ## 區塊標題
@@ -39,6 +39,10 @@
 
 ## 其他頁面
 
-- **直播頁** `/live`：左邊 `LivePlayer`（右下 `LiveReactions`，時段最後 60 秒左下 `PollCard` overlay）→ `VideoMeta`（AI 排入理由、影響標籤、收藏與分享）→ 換片時的 `ReactionBar` → `AIDisclosure`；右邊「這個時段」清單與「接下來」。第二期右邊加 `ChatPanel`。
+- **直播頁** `/live`：左邊 `LivePlayer`（右下 `LiveReactions`，時段最後 60 秒左下 `PollCard` overlay）→ `VideoMeta`（AI 排入理由、影響標籤、收藏與分享）→ 換片時的 `ReactionBar` → `AIDisclosure`；右邊 `ChatPanel`、「這個時段」清單與「接下來」。
 - **影片頁** `/watch/{id}`：`VideoPlayer`（觀眾最有反應的片段標記）→ `ReactionBar` → `VideoMeta` → 版本切換 → `AIDisclosure` → 同主題的影片。
-- **節目表** `/schedule`：本週／下週切換；投票期間最上方 `PollCard`（full）；每天一列 20:00–24:00 的 `DaySlot`。
+- **節目表** `/schedule`：本週／下週切換；投票期間最上方 `PollCard`（full）；`ScheduleWeek`。
+- **演員頁** `/actor/{handle}`：左上演員卡（大頭照、平台／創作者演員、介紹、作品／提問／影片回答數）＋右上自我介紹影片 → `AskActor`（左）與「大家想問的」（右，最多 +1／最新／已回答）→ 演出作品 → `AIDisclosure`。
+- **主題頁** `/topic/{key}`：`TopicHeader` → `TopicBento`（精選）→ 其餘影片格線 → 歸納說明。
+- **許願牆** `/wishes`：`WishComposer` 與「願望會怎麼走」說明並排 → 狀態篩選 `SegmentedTabs` → `WishCard` 格線。
+- **製作後台** `/studio`（以 CAFECA 登入）：每個人只看到自己的影片與專屬演員；分頁有影片製作、演員陣容、廣告製作、觀眾回饋，管理者另有審核。

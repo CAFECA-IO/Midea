@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Midea","components":[{"name":"Logo"},{"name":"Icon"},{"name":"Button"},{"name":"SignInButton"},{"name":"SearchField"},{"name":"SegmentedTabs"},{"name":"SiteHeader"},{"name":"SiteFooter"},{"name":"Badge"},{"name":"Tag"},{"name":"ProgressBar"},{"name":"SectionHeader"},{"name":"BentoGrid"},{"name":"VideoTile"},{"name":"ThemeTile"},{"name":"RankTile"},{"name":"RankRow"},{"name":"DaySlot"},{"name":"ActorCard"},{"name":"InfluenceTag"},{"name":"ViewerCount"},{"name":"ReactionBar"},{"name":"LiveReactions"},{"name":"PollCard"},{"name":"LivePlayer"},{"name":"VideoPlayer"},{"name":"VideoMeta"},{"name":"AIDisclosure"},{"name":"SignInDialog"},{"name":"AccountMenu"},{"name":"Skeleton"},{"name":"EmptyState"},{"name":"TopicBento"},{"name":"BottomNav"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Midea","components":[{"name":"Logo"},{"name":"Icon"},{"name":"Button"},{"name":"SignInButton"},{"name":"SearchField"},{"name":"SegmentedTabs"},{"name":"SiteHeader"},{"name":"SiteFooter"},{"name":"Badge"},{"name":"Tag"},{"name":"ProgressBar"},{"name":"SectionHeader"},{"name":"BentoGrid"},{"name":"VideoTile"},{"name":"ThemeTile"},{"name":"RankTile"},{"name":"RankRow"},{"name":"DaySlot"},{"name":"ActorCard"},{"name":"InfluenceTag"},{"name":"ViewerCount"},{"name":"ReactionBar"},{"name":"LiveReactions"},{"name":"PollCard"},{"name":"LivePlayer"},{"name":"VideoPlayer"},{"name":"VideoMeta"},{"name":"AIDisclosure"},{"name":"SignInDialog"},{"name":"AccountMenu"},{"name":"Skeleton"},{"name":"EmptyState"},{"name":"TopicBento"},{"name":"BottomNav"},{"name":"ChatPanel"},{"name":"WishCard"},{"name":"WishComposer"},{"name":"AskActor"},{"name":"AnswerTile"},{"name":"TopicHeader"},{"name":"ScheduleDay"},{"name":"ScheduleWeek"}]} */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -434,7 +434,7 @@
   function TopicBento(p) {
     var vs = p.videos || [];
     return h('section', { className: 'md-topic', 'aria-labelledby': p.id },
-      h(SectionHeader, { title: p.title, tag: p.tagNode ? null : p.tag, meta: p.meta, id: p.id, level: p.level || 3 }),
+      h(SectionHeader, { title: p.title, tag: p.tagNode ? null : p.tag, meta: p.meta, action: p.action, id: p.id, level: p.level || 3 }),
       p.tagNode ? h('div', { className: 'md-topic-tag' }, p.tagNode) : null,
       h(BentoGrid, { row: 'topic' }, vs.slice(0, 5).map(function (v, i) {
         // lead 2×2; the other 2×2 quarter is filled exactly: 1 → 2×2, 2 → 1×2 each, 3 → 1×1 + 1×1 + 2×1, 4 → 1×1 each
@@ -457,11 +457,149 @@
     }));
   }
 
+  /* ---------------------------------------------------------------- v3: community (phase 2) and schedule/topic pages */
+  Object.assign(PATHS, {
+    flag: [['path', { d: 'M5 21V4M5 4h11l-2 4 2 4H5' }]],
+    send: [['path', { d: 'M4 12 20 4l-6 16-3-7z' }]],
+    chat: [['path', { d: 'M4 5h16v11H9l-5 4z' }]],
+    star: [['path', { d: 'm12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z' }]]
+  });
+
+  /* ChatPanel — live chat: pinned official note, messages, composer, moderation feedback; collapsible on phones */
+  function ChatPanel(p) {
+    var list = React.useRef(null);
+    var _t = React.useState(''), text = _t[0], setText = _t[1];
+    var _o = React.useState(p.defaultOpen !== false), open = _o[0], setOpen = _o[1];
+    var max = p.max || 100;
+    React.useEffect(function () { var el = list.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight; }, [p.messages && p.messages.length]);
+    function send(e) { e.preventDefault(); var t = text.trim(); if (!t || p.disabled) return; if (p.onSend) Promise.resolve(p.onSend(t)).then(function (ok) { if (ok !== false) setText(''); }); }
+    return h('aside', { className: cx('md-chat', !open && 'is-closed'), 'aria-label': p.title },
+      h('div', { className: 'md-chat-head' },
+        h('h2', { className: 'md-chat-title' }, p.title),
+        p.meta ? h('span', { className: 'md-meta' }, p.meta) : null,
+        h('button', { type: 'button', className: 'md-linkbtn md-chat-toggle', 'aria-expanded': open ? 'true' : 'false', onClick: function () { setOpen(!open); } }, open ? p.collapseLabel : p.expandLabel)),
+      open ? h(React.Fragment, null,
+        p.pinned ? h('div', { className: 'md-chat-pin' }, h(Badge, { tone: 'now', dot: false }, p.pinnedLabel), h('span', null, p.pinned)) : null,
+        h('ol', { className: 'md-chat-list', ref: list, 'aria-live': 'polite' }, (p.messages || []).map(function (m) {
+          return h('li', { key: m.id, className: 'md-chat-msg' },
+            h('b', null, m.nickname), h('span', null, m.text),
+            p.onReport ? h('button', { type: 'button', className: 'md-chat-report', 'aria-label': p.reportLabel, title: p.reportLabel, onClick: function () { p.onReport(m); } }, h(Icon, { name: 'flag', size: 13 })) : null);
+        })),
+        p.notice ? h('p', { className: 'md-chat-notice', role: 'status' }, p.notice) : null,
+        p.composer === false ? null : h('form', { className: 'md-chat-form', onSubmit: send },
+          p.signedIn === false ? h(SignInButton, { variant: 'outline', onClick: p.onSignIn }, p.signInLabel) :
+            h(React.Fragment, null,
+              h('label', { className: 'md-sr', htmlFor: 'md-chat-in' }, p.inputLabel),
+              h('input', { id: 'md-chat-in', className: 'md-input', value: text, maxLength: max, placeholder: p.placeholder, disabled: p.disabled, onChange: function (e) { setText(e.target.value); } }),
+              h('button', { type: 'submit', className: 'md-iconbtn md-chat-send', 'aria-label': p.sendLabel, disabled: p.disabled || !text.trim() }, h(Icon, { name: 'send', size: 18 }))),
+          p.hint ? h('span', { className: 'md-meta md-chat-hint' }, p.hint) : null)) : null);
+  }
+
+  /* WishCard — a merged wish: kind, text, +1 progress to the production threshold, status */
+  var WISH_TONE = { open: 'neutral', topic: 'up', producing: 'now', done: 'up' };
+  function WishCard(p) {
+    var pct = Math.round(100 * Math.min(1, p.progress || 0));
+    return h('article', { className: 'md-wish' },
+      h('div', { className: 'md-wish-top' }, h('span', { className: 'md-meta' }, p.kindLabel), p.statusLabel ? h(Badge, { tone: WISH_TONE[p.status] || 'neutral', dot: false }, p.statusLabel) : null),
+      h('p', { className: 'md-wish-text' }, p.text),
+      p.note ? h('span', { className: 'md-meta' }, p.note) : null,
+      h('div', { className: 'md-progress', role: 'progressbar', 'aria-label': p.progressLabel, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': pct }, h('span', { style: { width: pct + '%' } })),
+      h('div', { className: 'md-wish-foot' },
+        h('span', { className: 'md-meta' }, p.countLabel),
+        h('span', { className: 'md-wish-acts' },
+          p.onReport ? h('button', { type: 'button', className: 'md-iconbtn', 'aria-label': p.reportLabel, title: p.reportLabel, onClick: p.onReport }, h(Icon, { name: 'flag', size: 15 })) : null,
+          h('button', { type: 'button', className: cx('md-chip md-chip-sm', p.supported && 'is-on'), 'aria-pressed': p.supported ? 'true' : 'false', onClick: p.onSupport }, p.supported ? p.supportedLabel : p.supportLabel))));
+  }
+
+  /* WishComposer — topic (free text ≤ 40) or cast (1–2 actors + one line) */
+  function WishComposer(p) {
+    var _k = React.useState('topic'), kind = _k[0], setKind = _k[1];
+    var _t = React.useState(''), text = _t[0], setText = _t[1];
+    var _a = React.useState([]), cast = _a[0], setCast = _a[1];
+    var max = p.max || 40;
+    function toggle(hd) { setCast(function (c) { return c.indexOf(hd) >= 0 ? c.filter(function (x) { return x !== hd; }) : c.concat([hd]).slice(-2); }); }
+    function submit(e) {
+      e.preventDefault();
+      if (!text.trim() || (kind === 'cast' && !cast.length)) return;
+      Promise.resolve(p.onSubmit && p.onSubmit({ kind: kind, text: text.trim(), actors: kind === 'cast' ? cast : [] })).then(function (ok) { if (ok !== false) { setText(''); setCast([]); } });
+    }
+    return h('form', { className: 'md-wishform', onSubmit: submit },
+      h('div', { className: 'md-wishform-head' }, h('h2', { className: 'md-wishform-title', id: 'md-wish-t' }, p.title), p.left != null ? h('span', { className: 'md-meta' }, p.leftLabel) : null),
+      h(SegmentedTabs, { label: p.kindLabel, value: kind, onChange: setKind, options: [{ value: 'topic', label: p.topicLabel }, { value: 'cast', label: p.castLabel }] }),
+      kind === 'cast' ? h('div', { className: 'md-wishform-cast', role: 'group', 'aria-label': p.castPick },
+        (p.actors || []).map(function (a) {
+          var on = cast.indexOf(a.handle) >= 0;
+          return h('button', { key: a.handle, type: 'button', className: cx('md-castpick', on && 'is-on'), 'aria-pressed': on ? 'true' : 'false', onClick: function () { toggle(a.handle); } },
+            h('img', { src: a.image, alt: '' }), h('span', null, a.name), h('small', null, '@' + a.handle));
+        })) : null,
+      h('label', { className: 'md-field' }, h('span', { className: 'md-meta' }, kind === 'cast' ? p.castTextLabel : p.topicTextLabel),
+        h('input', { className: 'md-input', value: text, maxLength: max, placeholder: kind === 'cast' ? p.castPlaceholder : p.topicPlaceholder, onChange: function (e) { setText(e.target.value); } }),
+        h('span', { className: 'md-meta md-count' }, text.length + ' / ' + max)),
+      p.rules ? h('span', { className: 'md-meta' }, p.rules) : null,
+      h('div', { className: 'md-wishform-foot' }, p.footer ? h('span', { className: 'md-meta' }, p.footer) : h('span'),
+        h(Button, { type: 'submit', disabled: p.disabled || !text.trim() || (kind === 'cast' && !cast.length) }, p.submitLabel)));
+  }
+
+  /* AskActor — question box (≤ 60, 3 a day) and the asker's own questions with the actor's text reply */
+  function AskActor(p) {
+    var _t = React.useState(''), text = _t[0], setText = _t[1];
+    var max = p.max || 60;
+    function submit(e) { e.preventDefault(); if (!text.trim()) return; Promise.resolve(p.onAsk && p.onAsk(text.trim())).then(function (ok) { if (ok !== false) setText(''); }); }
+    return h('div', { className: 'md-ask' },
+      h('form', { className: 'md-ask-form', onSubmit: submit },
+        h('div', { className: 'md-wishform-head' }, h('h2', { className: 'md-wishform-title' }, p.title), p.leftLabel ? h('span', { className: 'md-meta' }, p.leftLabel) : null),
+        h('label', { className: 'md-field' }, h('span', { className: 'md-meta' }, p.inputLabel),
+          h('textarea', { className: 'md-input', rows: 2, value: text, maxLength: max, placeholder: p.placeholder, onChange: function (e) { setText(e.target.value); } }),
+          h('span', { className: 'md-meta md-count' }, text.length + ' / ' + max)),
+        h('div', { className: 'md-wishform-foot' }, h('span', { className: 'md-meta' }, p.footer),
+          p.signedIn === false ? h(SignInButton, { onClick: p.onSignIn }) : h(Button, { type: 'submit', disabled: p.disabled || !text.trim() }, p.submitLabel))),
+      (p.replies || []).map(function (r) {
+        return h('div', { key: r.id, className: 'md-reply' },
+          h('p', { className: 'md-reply-q' }, h('span', { className: 'md-meta' }, p.youAskedLabel), ' ', r.question),
+          h('div', { className: 'md-reply-head' },
+            p.avatar ? h('img', { src: p.avatar, alt: '' }) : null,
+            h('b', null, p.actorName),
+            h('span', { className: 'md-reply-label' }, p.aiLabel)),
+          h('p', { className: 'md-reply-a' }, r.reply || p.pendingLabel),
+          p.replyNote ? h('span', { className: 'md-meta' }, p.replyNote) : null);
+      }));
+  }
+
+  /* AnswerTile — an actor's video answer (VideoTile with the question) */
+  function AnswerTile(p) {
+    return h(VideoTile, { image: p.image, title: '「' + p.question + '」', subtitle: p.meta, href: p.href, size: 'sm', focus: 'top',
+      badge: h(Badge, { tone: 'neutral', dot: false }, p.aiLabel), cols: p.cols, rows: p.rows });
+  }
+
+  /* TopicHeader — topic page title: name, reason, regroup time and count */
+  function TopicHeader(p) {
+    return h('header', { className: 'md-topichead' },
+      p.eyebrow ? h('span', { className: 'md-vmeta-eyebrow' }, p.eyebrow) : null,
+      h('h1', { className: 'md-topichead-title' }, p.title),
+      h('div', { className: 'md-vmeta-tags' }, p.tags || null, p.meta ? h('span', { className: 'md-meta' }, p.meta) : null));
+  }
+
+  /* ScheduleDay / ScheduleWeek — the official channel's prime time, one row per day */
+  function ScheduleDay(p) {
+    return h('section', { className: cx('md-sday', p.today && 'is-today'), 'aria-label': p.label },
+      h('h3', { className: 'md-sday-d' }, p.label),
+      h('div', { className: 'md-sday-slots' }, (p.slots || []).map(function (s) {
+        return h(DaySlot, { key: s.id, day: s.range + (s.now ? ' · ' + (p.nowLabel || '') : ''), title: s.title, time: s.meta, today: !!s.now, href: s.href, tag: s.tag });
+      })));
+  }
+  function ScheduleWeek(p) {
+    return h('div', { className: 'md-sweek' }, (p.days || []).map(function (d) {
+      return h(ScheduleDay, { key: d.label, label: d.label, today: d.today, slots: d.slots, nowLabel: p.nowLabel });
+    }));
+  }
+
   var api = { Logo: Logo, Icon: Icon, Button: Button, SignInButton: SignInButton, SearchField: SearchField, SegmentedTabs: SegmentedTabs,
     SiteHeader: SiteHeader, SiteFooter: SiteFooter, Badge: Badge, Tag: Tag, ProgressBar: ProgressBar, SectionHeader: SectionHeader,
     BentoGrid: BentoGrid, VideoTile: VideoTile, ThemeTile: ThemeTile, RankTile: RankTile, RankRow: RankRow, DaySlot: DaySlot, ActorCard: ActorCard,
     InfluenceTag: InfluenceTag, ViewerCount: ViewerCount, ReactionBar: ReactionBar, LiveReactions: LiveReactions, PollCard: PollCard,
     LivePlayer: LivePlayer, VideoPlayer: VideoPlayer, VideoMeta: VideoMeta, AIDisclosure: AIDisclosure, SignInDialog: SignInDialog,
-    AccountMenu: AccountMenu, Skeleton: Skeleton, EmptyState: EmptyState, TopicBento: TopicBento, BottomNav: BottomNav };
+    AccountMenu: AccountMenu, Skeleton: Skeleton, EmptyState: EmptyState, TopicBento: TopicBento, BottomNav: BottomNav,
+    ChatPanel: ChatPanel, WishCard: WishCard, WishComposer: WishComposer, AskActor: AskActor, AnswerTile: AnswerTile,
+    TopicHeader: TopicHeader, ScheduleDay: ScheduleDay, ScheduleWeek: ScheduleWeek };
   window.Midea = Object.assign(window.Midea || {}, api);
 })();
