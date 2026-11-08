@@ -195,8 +195,22 @@ async def _start():
 
 
 # ------------------------------------------------------------------------------------------------ pages & media
+def _asset_version() -> str:
+    """Changes whenever a page script, stylesheet or the design-system bundle changes — the CDN caches /static and /ds
+    for hours, so every page asks for `?v=<version>` and a deploy is visible at once."""
+    import hashlib
+    h = hashlib.sha1()
+    for f in sorted(list(STATIC.glob("*.js")) + list(STATIC.glob("*.css")) + list(_DS_FILES.values())):
+        if f.exists():
+            h.update(f"{f.name}:{f.stat().st_mtime_ns}:{f.stat().st_size}".encode())
+    return h.hexdigest()[:10]
+
+
 def _page(name: str) -> HTMLResponse:
-    return HTMLResponse((STATIC / name).read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
+    html = (STATIC / name).read_text(encoding="utf-8")
+    v = _asset_version()
+    html = re.sub(r'((?:src|href)="/(?:static|ds)/[^"?]+)"', lambda m: f'{m.group(1)}?v={v}"', html)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/", response_class=HTMLResponse)
