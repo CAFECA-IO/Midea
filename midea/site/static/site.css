@@ -293,3 +293,11 @@ body.is-immersive .site-wrap { padding: 0; }
   .art-selbar { flex-wrap: wrap; max-width: calc(100vw - 32px); }
 }
 .art-points ol { counter-reset: pt; }
+.art-sec { display: flex; flex-direction: column; gap: 16px; margin-top: var(--space-4); }
+.art-sec-h { margin: 0; font-size: 24px; line-height: 32px; font-weight: 900; }
+.art-cite { display: inline-block; min-width: 18px; margin: 0 1px; padding: 0 4px; border-radius: var(--radius-pill); background: var(--surface-raised); color: var(--ink-muted);
+  font-size: 11px; line-height: 16px; font-weight: 800; text-align: center; text-decoration: none; vertical-align: 2px; }
+.art-cite:hover { color: var(--amber); }
+.art-follow { display: flex; flex-direction: column; gap: 8px; padding: var(--space-5); border-radius: var(--radius-md); background: var(--surface); }
+.art-follow ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 16px; line-height: 26px; }
+@media (max-width: 639px) { .art-sec-h { font-size: 21px; line-height: 28px; } }

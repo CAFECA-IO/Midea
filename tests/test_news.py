@@ -193,3 +193,22 @@ def test_tick_schedule(site, monkeypatch):
     assert n.tick(datetime(2026, 11, 9, 7, 0)) is None
     assert n.tick(datetime(2026, 11, 10, 6, 1)) == "daily"          # 週二只有每日報導
     assert [k for k, _ in calls] == ["daily", "weekly", "daily"]
+
+
+def test_depth_rules_code_excerpts_and_key_files():
+    from midea.site.news import _verbatim, validate
+    from midea.site.news_research import Pack, _key_files
+    thin = {"title": "t", "dek": "d", "points": ["a"], "paragraphs": ["b"], "sections": [{"heading": "h", "paragraphs": ["短"]}]}
+    assert any("3 analysis sections" in x for x in validate(thin, "brief"))
+    deep = dict(thin, sections=[{"heading": f"h{i}", "paragraphs": ["字" * 600]} for i in range(4)])
+    assert validate(deep, "brief") == []
+    src = "[3] repo/main.py\ndef run(x):\n    return loop(x)  # 每輪結束就退出\n"
+    assert _verbatim("def run(x):\n  return loop(x)  # 每輪結束就退出", src) and not _verbatim("def run(y): pass", src)
+    tree = [{"type": "blob", "path": "src/agent.py", "size": 9000}, {"type": "blob", "path": "tests/test_agent.py", "size": 9000},
+            {"type": "blob", "path": "node_modules/x/index.js", "size": 9000}, {"type": "blob", "path": "src/util/helpers.py", "size": 3000}]
+    assert _key_files(tree, "Python")[0] == "src/agent.py" and "tests/test_agent.py" not in _key_files(tree, "Python")
+    p = Pack(budget=700)
+    p.add("A", "x" * 300, "https://a")
+    p.add("B", "y" * 300, "https://b")
+    p.add("C", "z" * 300, "https://c")                     # over budget → left out
+    assert [s["n"] for s in p.sources] == [1, 2] and "[2] B <https://b>" in p.text()

@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Midea","components":[{"name":"Logo"},{"name":"Icon"},{"name":"Button"},{"name":"SignInButton"},{"name":"SearchField"},{"name":"SegmentedTabs"},{"name":"SiteHeader"},{"name":"SiteFooter"},{"name":"Badge"},{"name":"Tag"},{"name":"ProgressBar"},{"name":"SectionHeader"},{"name":"BentoGrid"},{"name":"VideoTile"},{"name":"ThemeTile"},{"name":"RankTile"},{"name":"RankRow"},{"name":"DaySlot"},{"name":"ActorCard"},{"name":"InfluenceTag"},{"name":"ViewerCount"},{"name":"ReactionBar"},{"name":"LiveReactions"},{"name":"PollCard"},{"name":"LivePlayer"},{"name":"VideoPlayer"},{"name":"VideoMeta"},{"name":"AIDisclosure"},{"name":"SignInDialog"},{"name":"AccountMenu"},{"name":"Skeleton"},{"name":"EmptyState"},{"name":"TopicBento"},{"name":"BottomNav"},{"name":"ChatPanel"},{"name":"WishCard"},{"name":"WishComposer"},{"name":"AskActor"},{"name":"AnswerTile"},{"name":"TopicHeader"},{"name":"ScheduleDay"},{"name":"ScheduleWeek"},{"name":"KindChip"},{"name":"ArticleFigure"},{"name":"ArticleTile"},{"name":"ArticleReactions"},{"name":"FollowupMeter"},{"name":"QuizCard"},{"name":"SourceList"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Midea","components":[{"name":"Logo"},{"name":"Icon"},{"name":"Button"},{"name":"SignInButton"},{"name":"SearchField"},{"name":"SegmentedTabs"},{"name":"SiteHeader"},{"name":"SiteFooter"},{"name":"Badge"},{"name":"Tag"},{"name":"ProgressBar"},{"name":"SectionHeader"},{"name":"BentoGrid"},{"name":"VideoTile"},{"name":"ThemeTile"},{"name":"RankTile"},{"name":"RankRow"},{"name":"DaySlot"},{"name":"ActorCard"},{"name":"InfluenceTag"},{"name":"ViewerCount"},{"name":"ReactionBar"},{"name":"LiveReactions"},{"name":"PollCard"},{"name":"LivePlayer"},{"name":"VideoPlayer"},{"name":"VideoMeta"},{"name":"AIDisclosure"},{"name":"SignInDialog"},{"name":"AccountMenu"},{"name":"Skeleton"},{"name":"EmptyState"},{"name":"TopicBento"},{"name":"BottomNav"},{"name":"ChatPanel"},{"name":"WishCard"},{"name":"WishComposer"},{"name":"AskActor"},{"name":"AnswerTile"},{"name":"TopicHeader"},{"name":"ScheduleDay"},{"name":"ScheduleWeek"},{"name":"KindChip"},{"name":"ArticleFigure"},{"name":"ArticleTile"},{"name":"ArticleReactions"},{"name":"FollowupMeter"},{"name":"QuizCard"},{"name":"SourceList"},{"name":"ArticleCover"},{"name":"CodeExcerpt"}]} */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -641,9 +641,18 @@
       p.caption ? h('figcaption', { className: 'md-meta' }, typeof p.caption === 'function' ? p.caption(sel) : p.caption) : null);
   }
 
-  /* ArticleTile — a report in the 今日報導 Bento: kind, source, mini figure, title, follow-up counts */
+  /* ArticleTile — a report in the 今日報導 Bento: AI cover (or mini figure), kind, source, title, follow-up counts */
   function ArticleTile(p) {
     var lead = p.cols > 1;
+    if (p.image) {
+      return h('a', { href: p.href || '#', className: cx('md-tile', 'md-atile', 'has-image', lead && 'is-lead', span(p.cols, p.rows)) },
+        h('span', { className: 'md-atile-img' }, h('img', { src: p.image, alt: p.alt || '', loading: 'lazy' }), lead ? h('span', { className: 'md-scrim', 'aria-hidden': 'true' }) : null),
+        h('span', { className: 'md-atile-body' },
+          h('span', { className: 'md-atile-top' }, h(KindChip, { kind: p.kind }, p.kindLabel), p.source ? h('span', { className: 'md-meta' }, p.source) : null, p.badge || null),
+          h('span', { className: 'md-atile-title' }, p.title),
+          lead && p.dek ? h('span', { className: 'md-atile-dek' }, p.dek) : null,
+          p.meta ? h('span', { className: 'md-atile-meta' }, p.meta) : null));
+    }
     return h('a', { href: p.href || '#', className: cx('md-tile', 'md-atile', lead && 'is-lead', span(p.cols, p.rows)) },
       h('span', { className: 'md-atile-top' }, h(KindChip, { kind: p.kind }, p.kindLabel), p.source ? h('span', { className: 'md-meta' }, p.source) : null,
         p.badge || null),
@@ -689,12 +698,29 @@
         (p.right != null ? ' · ' + p.right + '% 的讀者答對' : '')) : null);
   }
 
+  /* ArticleCover — the article's AI-generated cover (16:9) with the disclosure caption */
+  function ArticleCover(p) {
+    if (!p.image) return null;
+    return h('figure', { className: 'md-acover' }, h('img', { src: p.image, alt: p.alt || '' }),
+      h('figcaption', { className: 'md-meta' }, h(Icon, { name: 'sparkle', size: 12 }), p.caption || '封面為 AI 生成示意圖'));
+  }
+
+  /* CodeExcerpt — a short verbatim excerpt from a repository, with its path and what to notice */
+  function CodeExcerpt(p) {
+    return h('figure', { className: 'md-code' },
+      h('figcaption', null, p.href ? h('a', { href: p.href, target: '_blank', rel: 'noopener noreferrer' }, p.path) : h('span', null, p.path),
+        p.lang ? h('span', { className: 'md-meta' }, p.lang) : null),
+      h('pre', null, h('code', null, p.code)),
+      p.note ? h('p', { className: 'md-code-note' }, p.note) : null);
+  }
+
   /* SourceList — 「AI 撰寫 · 附來源」 and the source links */
   function SourceList(p) {
     return h('div', { className: 'md-sources' },
       h('span', { className: 'md-tag md-tag-influence' }, h(Icon, { name: 'sparkle', size: 13 }), p.label || 'AI 撰寫 · 附來源'),
       (p.sources || []).map(function (s, i) {
-        return h('a', { key: i, href: s.url, target: '_blank', rel: 'noopener noreferrer', className: 'md-sources-a' }, h(Icon, { name: 'link', size: 13 }), s.source || s.title);
+        return h('a', { key: i, id: s.n ? 'src-' + s.n : undefined, href: s.url, target: '_blank', rel: 'noopener noreferrer', className: 'md-sources-a' },
+        s.n ? h('b', null, '[' + s.n + ']') : h(Icon, { name: 'link', size: 13 }), s.source || s.title);
       }));
   }
 
@@ -707,6 +733,6 @@
     ChatPanel: ChatPanel, WishCard: WishCard, WishComposer: WishComposer, AskActor: AskActor, AnswerTile: AnswerTile,
     TopicHeader: TopicHeader, ScheduleDay: ScheduleDay, ScheduleWeek: ScheduleWeek,
     KindChip: KindChip, ArticleFigure: ArticleFigure, ArticleTile: ArticleTile, ArticleReactions: ArticleReactions,
-    FollowupMeter: FollowupMeter, QuizCard: QuizCard, SourceList: SourceList };
+    FollowupMeter: FollowupMeter, QuizCard: QuizCard, SourceList: SourceList, ArticleCover: ArticleCover, CodeExcerpt: CodeExcerpt };
   window.Midea = Object.assign(window.Midea || {}, api);
 })();

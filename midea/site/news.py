@@ -177,11 +177,9 @@ def collect_github(day: date) -> list[dict]:
               "lang": r.get("language") or "", "created": r["created_at"][:10]} for r in j.get("items", [])]
     if not repos:
         return []
-    lines = "\n".join(f"{i + 1}. {r['name']}（{r['lang'] or '—'}，{r['created']} 建立）：{r['stars']} 顆星。{r['desc']}" for i, r in enumerate(repos[:10]))
-    out = [{"kind": "repo", "title": f"過去 7 天新建、星數最多的 GitHub 專案（{since} 起）", "url": "https://github.com/search?q=created%3A%3E"
-            + since + "&s=stars&o=desc&type=repositories", "summary": lines[:600], "text": lines, "source": "GitHub", "roundup": True}]
-    for r in repos[:6]:
-        out.append({"kind": "repo", "title": r["name"], "url": r["url"], "summary": f"{r['desc']}（{r['stars']} 顆星，{r['created']} 建立）",
+    out = []
+    for r in repos[:8]:
+        out.append({"kind": "repo", "title": r["name"], "url": r["url"], "summary": f"{r['desc']}（{r['stars']} 顆星，{r['lang'] or '—'}，{r['created']} 建立）",
                     "source": "GitHub", "repo": r})
     return out
 
@@ -260,24 +258,44 @@ def unverified_numbers(spec: dict | None, source: str) -> list[str]:
 # ================================================================================================ LLM prompts
 PICK_SYSTEM = (
     "You are the morning editor of Midea, a Traditional Chinese AI video platform. From the candidate list pick exactly "
-    "{n} topics for today's reports. Rules: include every candidate marked must=true; include at least one 'repo' and one "
-    "'paper' candidate when available; prefer stories with concrete numbers, broad interest, technology/AI/science/culture; "
-    "never pick a story already covered in recent_titles (same event in another language counts); avoid tragedies, crime victims, accusations against private persons, and "
-    "medical/investment advice. For each pick score how well each template fits (0–1): {templates}. "
-    "Return {{\"picks\": [{{\"index\": <int>, \"angle\": \"一句話角度（繁中）\", \"fit\": {{\"brief\": 0.0, ...}}}}]}}.")
+    "{n} topics for today's in-depth reports. Rules: include every candidate marked must=true; include at least one 'repo' "
+    "and one 'paper' candidate when available. Prefer news with a story to follow — people or companies with something at "
+    "stake, a conflict, a turning point, consequences still unfolding — and enough substance for real analysis; prefer "
+    "GitHub projects whose code or author has a story (an unusual technical approach, a solo author, a surprising origin, "
+    "fast growth); prefer papers with a clear idea and results. Never pick a story already covered in recent_titles (the "
+    "same event in another language counts). Avoid tragedies, crime victims, accusations against private persons, and "
+    "medical/investment advice. For each pick give `query` — 3–6 English keywords to find other coverage of the same "
+    "event — and score how well each template fits (0–1): {templates}. "
+    "Return {{\"picks\": [{{\"index\": <int>, \"angle\": \"一句話角度（繁中）\", \"query\": \"english keywords\", \"fit\": {{\"brief\": 0.0, ...}}}}]}}.")
 
 WRITE_SYSTEM = (
-    "You write a short report for Midea (Traditional Chinese, Taiwan usage, plain and calm, no exclamation marks, no emoji, "
-    "no hype words like 超/爆/必看). Put a space between Chinese and Latin letters or digits (例：OpenAI 傳以 1.25 兆美元). "
-    "24-hour time; dates like 11/9（一）. Keep product and paper names in their original "
-    "language. Use ONLY facts and numbers from the SOURCE; never invent numbers, quotes or names. A chart compares like with "
-    "like: every row/side in one figure has the SAME unit and measures the same kind of thing (never mix counts, percents, "
-    "seconds and money in one chart); if the source has no comparable set, use another figure type or fewer rows. "
-    "If the source lacks a "
-    "number, leave it out. Write for curious general readers; explain jargon in one clause. "
-    "Template: {template} — {fit}. Return JSON with these fields:\n{schema}\n"
-    "Common fields: title (≤ 30 字), dek (≤ 60 字), why (為什麼重要, ≤ 60 字), quiz (optional: {{\"q\": str, \"options\": [3 short strings], "
-    "\"answer\": index}} — answerable from the article), tags (≤ 3 short strings).")
+    "You are a senior reporter at Midea writing an IN-DEPTH report in Traditional Chinese (Taiwan usage): analysis, not a "
+    "summary. Plain, calm and precise; no exclamation marks, no emoji, no hype words (超/爆/必看/震驚). Put a space between "
+    "Chinese and Latin letters or digits (例：OpenAI 傳以 1.25 兆美元). 24-hour time; dates like 11/9（一）. Keep product, "
+    "repository and paper names in their original language.\n"
+    "FACTS: use ONLY facts, numbers, names and quotes found in the SOURCE parts; cite them inline with the part number like "
+    "[1] or [2][3]. Never invent anything; if something is unknown, say it is not yet known. Explain jargon in one clause.\n"
+    "DEPTH by kind:\n"
+    "- 新聞: tell the story. Open `sections` with a concrete lede (the moment, the decision, the number that matters). Then: "
+    "who the players are and what each has at stake; how we got here (earlier steps found in the SOURCE); what the different "
+    "sources say and where they disagree; what it changes; what to watch next. Put 2–3 open questions in `follow`.\n"
+    "- GitHub: analyse the project AND its code. What problem it solves and for whom; the architecture (from the file tree); "
+    "how the key source files actually work, with 1–3 `code` excerpts copied VERBATIM from the SOURCE source-file parts "
+    "(≤ 14 lines each, with the path and what to notice); notable engineering choices and trade-offs; the people — who the "
+    "author is (profile, other projects, commit history and pace) and any story behind the project; limits and risks "
+    "(license, maturity, tests). Put 2–3 open questions in `follow`.\n"
+    "- 論文: the problem, the idea, how the method works step by step, the experiments and numbers, limits, and what it "
+    "means for AI video production.\n"
+    "LENGTH: `sections` has 4–6 sections, each {{\"heading\": str (≤ 14 字), \"paragraphs\": [2–4 paragraphs]}}; together "
+    "2000–3500 字.\n"
+    "CHARTS compare like with like: every row/side in one figure has the SAME unit and measures the same kind of thing; if "
+    "the SOURCE has no comparable set, use another figure type or fewer rows.\n"
+    "Template for the top of the article: {template} — {fit}. Return JSON with these fields:\n{schema}\n"
+    "Common fields: title (≤ 30 字, specific, no clickbait), dek (≤ 70 字), why (為什麼重要, ≤ 60 字), sections, follow "
+    "(news/GitHub), code (GitHub only: [{{\"path\": str, \"lang\": str, \"snippet\": str, \"note\": str}}]), quiz "
+    "({{\"q\": str, \"options\": [3 short strings], \"answer\": index}} answerable from the article), tags (≤ 3), "
+    "cover_prompt (ENGLISH, one sentence for an editorial cover illustration of the story's idea: no text or letters, no "
+    "logos, no real or identifiable people, no screenshots; describe objects, places, metaphors, light).")
 
 SCHEMAS = {
     "brief": '{"points": [3 sentences], "paragraphs": [2–3 paragraphs], "figure": {"type": "bars", "title": str, "unit": str, "rows": [{"label": str, "value": number, "display": str}], "highlight": 0}, "headline_number": {"display": str, "label": str}}',
@@ -299,10 +317,16 @@ WEEKLY_SYSTEM = (
 
 # ================================================================================================ the newsroom
 class Newsroom:
-    def __init__(self, store: Store, *, community=None, catalog=None):
+    def __init__(self, store: Store, *, community=None, catalog=None, cover_dir=None):
+        from pathlib import Path
         self.s, self.com, self.cat = store, community, catalog
+        self.cover_dir = Path(cover_dir) if cover_dir else None
+        self._pool: list[dict] = []
         with store._wlock:
             store.db.executescript(SCHEMA)
+            cols = {r["name"] for r in store.db.execute("PRAGMA table_info(article)").fetchall()}
+            if "cover" not in cols:
+                store.db.execute("ALTER TABLE article ADD COLUMN cover TEXT")
         self._busy = threading.Lock()
         self.rng = random.Random()
 
@@ -390,7 +414,7 @@ class Newsroom:
             c = cands[p["index"]]
             t = choose_template(p.get("fit") or {}, c["kind"], used, yday, self.rng)
             try:
-                art = self.write(c, t, p.get("angle") or "")
+                art = self.write(c, t, p.get("angle") or "", p.get("query"))
             except Exception as e:  # noqa: BLE001
                 log.warning("write failed for %s: %s", c.get("title"), e)
                 continue
@@ -398,7 +422,44 @@ class Newsroom:
             made.append(self.publish(day, c, t, art, p.get("fit") or {}, rank=self._next_rank(day)))
         if not made:
             raise RuntimeError("五篇都沒有寫成")
-        return {"articles": [m["slug"] for m in made], "templates": [m["template"] for m in made]}
+        covers = self.make_covers([m["slug"] for m in made])
+        return {"articles": [m["slug"] for m in made], "templates": [m["template"] for m in made], "covers": covers}
+
+    def make_covers(self, slugs: list[str]) -> int:
+        """AI cover per article (Z-Image-Turbo through the studio's ComfyUI), after all writing so Qwen and the image
+        model do not take turns on the GPU for every article. A failed cover leaves the article with its chart tile."""
+        if not self.cover_dir:
+            return 0
+        done = 0
+        for slug in slugs:
+            a = self.get(slug)
+            if not a:
+                continue
+            prompt = str(json.loads(a["body"]).get("cover_prompt") or a["title"])
+            try:
+                self.make_cover(slug, prompt)
+                done += 1
+            except Exception as e:  # noqa: BLE001
+                log.warning("cover for %s failed: %s", slug, e)
+        return done
+
+    def make_cover(self, slug: str, prompt: str) -> str:
+        from ..providers import image_zimage
+        self.cover_dir.mkdir(parents=True, exist_ok=True)
+        png = self.cover_dir / f"{slug}.png"
+        full = (f"{prompt}. Editorial cover illustration for a news magazine, cinematic soft light, deep warm dark tones with "
+                f"amber highlights, rich detail, 16:9 composition, no text, no letters, no logos, no watermark, no identifiable people")
+        image_zimage.generate(full, png, width=1344, height=768, label=slug)
+        out = self.cover_dir / f"{slug}.jpg"
+        try:
+            from PIL import Image
+            Image.open(png).convert("RGB").save(out, "JPEG", quality=86, optimize=True, progressive=True)
+            png.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            out = png
+        with self.s.tx() as c:
+            c.execute("UPDATE article SET cover=? WHERE slug=?", (out.name, slug))
+        return out.name
 
     def _next_rank(self, day: date) -> int:
         r = self.s.one("SELECT MAX(rank) m FROM article WHERE day=?", (day.isoformat(),))
@@ -410,7 +471,8 @@ class Newsroom:
             cands = [dict(c) for c in CANDIDATES]
         else:
             cands = collect_news() + collect_github(day) + collect_arxiv()
-        rows = self.s.q("SELECT title, sources FROM article WHERE day>=?", ((day - timedelta(days=14)).isoformat(),))
+        self._pool = [c for c in cands if c.get("kind") == "news"]
+        rows = self.s.q("SELECT title, sources FROM article WHERE day>=? AND status='live'", ((day - timedelta(days=14)).isoformat(),))
         urls = {json.loads(r["sources"])[0]["url"] for r in rows if json.loads(r["sources"])}
         titles = [r["title"] for r in rows]
         cands = [c for c in cands if c.get("url") not in urls and not any(_similar(c["title"], t) > 0.8 for t in titles)]
@@ -493,46 +555,71 @@ class Newsroom:
         for p in res:                                            # sensible defaults when the model gave no scores
             if not p.get("fit"):
                 k = cands[p["index"]]["kind"]
-                p["fit"] = {"paper": {"paper": 0.9}, "repo": {"ranking": 0.9} if cands[p["index"]].get("roundup") else {"brief": 0.6, "howto": 0.5}}.get(k, {"brief": 0.7, "timeline": 0.5})
+                p["fit"] = {"paper": {"paper": 0.9}, "repo": {"howto": 0.7, "brief": 0.5}}.get(k, {"brief": 0.7, "timeline": 0.5})
         return res[:n]
 
-    def write(self, c: dict, template: str, angle: str) -> dict:
+    def write(self, c: dict, template: str, angle: str, query: str | None = None) -> dict:
         if is_mock():
             from .news_fixtures import article_for
             return article_for(c["title"], template)
-        from ..providers.llm import llm
-        source = fetch_text(c)
+        pack = self.dossier(c, query)
+        source = pack.text()
         sys = WRITE_SYSTEM.format(template=TEMPLATES[template]["name"], fit=TEMPLATES[template]["fit"], schema=SCHEMAS[template])
-        user = json.dumps({"angle": angle, "kind": KINDS[c["kind"]], "source_name": c.get("source"), "url": c.get("url"),
-                           "title": c["title"], "SOURCE": source}, ensure_ascii=False)
-        art = _ask("news_write", sys, user)
+        user = json.dumps({"angle": angle, "kind": KINDS[c["kind"]], "title": c["title"], "SOURCE": source}, ensure_ascii=False)
+        art = _ask("news_write", sys, user, max_tokens=12000)
+        problems = validate(art, template)
+        if problems:                                             # too short or missing parts: one more try with the reason
+            art = _ask("news_write", sys, user + "\n\nThe previous draft had problems: " + "; ".join(problems) + ". Fix them.", max_tokens=12000)
         issue = _figure_issue(art.get("figure"), source)
         if issue:
-            art = _ask("news_write", sys, user + f"\n\nFix the figure: {issue}")
-            if _figure_issue(art.get("figure"), source):
+            fixed = _ask("news_write", sys, user + f"\n\nFix the figure: {issue}", max_tokens=12000)
+            if not _figure_issue(fixed.get("figure"), source) and not validate(fixed, template):
+                art = fixed
+            else:
                 art["figure"] = _numberless_figure(art, template)
-        art = _spaced(art)
+        art["code"] = [x for x in (art.get("code") or []) if isinstance(x, dict) and _verbatim(x.get("snippet"), source)][:3]
+        art = _spaced({k: v for k, v in art.items() if k != "code"}) | {"code": art["code"]}
         problems = validate(art, template)
         if problems:
             raise ValueError("; ".join(problems))
-        art["_source_text"] = source[:2000]
+        art["sources"] = pack.sources
         return art
+
+    def dossier(self, c: dict, query: str | None):
+        from . import news_research as R
+        try:
+            if c["kind"] == "repo" and c.get("repo"):
+                return R.github_dossier(c["repo"]["name"])
+            if c["kind"] == "paper":
+                return R.paper_dossier(c, _strip)
+            if c.get("sequel_of"):
+                p = R.Pack()
+                p.add(c.get("source") or "原文", c.get("text", ""), c.get("url", ""), limit=9000)
+                for r in R.related_news(c, self._pool, query, _strip):
+                    p.add(r["source"] or r["title"], f"{r['title']}\n{r['text']}", r["url"], limit=3500)
+                return p
+            return R.news_dossier(c, self._pool, query, _strip)
+        except Exception as e:  # noqa: BLE001
+            log.warning("research for %s fell back to the summary: %s", c.get("title"), e)
+            p = R.Pack()
+            p.add(c.get("source") or "來源", fetch_text(c), c.get("url", ""))
+            return p
 
     def publish(self, day: date, c: dict, template: str, art: dict, fit: dict, rank: int) -> dict:
         slug = f"{day.isoformat()}-{hashlib.sha1((c.get('url') or c['title']).encode()).hexdigest()[:6]}"
-        sources = [{"title": c["title"], "url": c.get("url", ""), "source": c.get("source", "")}] + \
-                  [s for s in (art.get("sources") or []) if isinstance(s, dict) and s.get("url")][:3]
+        cited = [x for x in (art.get("sources") or []) if isinstance(x, dict) and x.get("url")]
+        sources = cited[:8] if cited else [{"title": c["title"], "url": c.get("url", ""), "source": c.get("source", "")}]
         fig = art.get("figure")
         body = {k: v for k, v in art.items() if k not in ("title", "dek", "figure", "sources", "_source_text")}
         if c.get("sequel_of"):
             body["readers"] = c.get("readers")
-        words = len(json.dumps(body, ensure_ascii=False))
+        words = len(_article_text({"body": body}) if body else "")
         with self.s.tx() as cx:
             cx.execute("INSERT OR REPLACE INTO article(slug, day, rank, kind, template, title, dek, body, figure, sources, fit, status, "
                        "sequel_of, minutes, created) VALUES(?,?,?,?,?,?,?,?,?,?,?,'live',?,?,?)",
                        (slug, day.isoformat(), rank, c["kind"], template, _clean(art["title"])[:60], _clean(art["dek"])[:120],
                         json.dumps(body, ensure_ascii=False), json.dumps(fig, ensure_ascii=False) if fig else None,
-                        json.dumps(sources, ensure_ascii=False), json.dumps(fit), c.get("sequel_of"), max(1, round(words / 450)), time.time()))
+                        json.dumps(sources, ensure_ascii=False), json.dumps(fit), c.get("sequel_of"), max(1, round(words / 500)), time.time()))
             aid = cx.execute("SELECT id FROM article WHERE slug=?", (slug,)).fetchone()["id"]
             for q in c.get("answers") or []:
                 cx.execute("UPDATE article_question SET answered_in=? WHERE id=?", (aid, q))
@@ -555,7 +642,8 @@ class Newsroom:
              "sources": json.loads(a["sources"]), "counts": self.counts(a["id"]), "status": a["status"],
              "sequel_threshold": int(cfg("sequel_threshold", 20)), "date_label": _day_label(a["day"]),
              "published": now_local(a["created"]).strftime("%H:%M"), "mini": news_svg.mini(fig),
-             "lead_fig": news_svg.render(fig)["wide"], "video": self.video_of(a)}
+             "lead_fig": news_svg.render(fig)["wide"], "video": self.video_of(a),
+             "cover": f"/media/n/{a['slug']}.jpg?v={int(a['created'])}" if a["cover"] else None}
         if a["sequel_of"]:
             o = self.s.one("SELECT slug, title FROM article WHERE id=?", (a["sequel_of"],))
             d["sequel_of"] = dict(o) if o else None
@@ -816,6 +904,11 @@ def validate(art: dict, template: str) -> list[str]:
     for k in need:
         if not art.get(k):
             p.append(f"missing {k}")
+    secs = [x for x in (art.get("sections") or []) if isinstance(x, dict) and x.get("heading") and x.get("paragraphs")]
+    if len(secs) < 3:
+        p.append("needs at least 3 analysis sections")
+    elif sum(len(str(t)) for x in secs for t in x["paragraphs"]) < int(cfg("min_chars", 1500)):
+        p.append(f"analysis too short (needs at least {int(cfg('min_chars', 1500))} characters across the sections)")
     if template == "versus" and len(art.get("sides") or []) != 2:
         p.append("versus needs two sides")
     text = json.dumps({k: v for k, v in art.items() if k not in ("figure", "sources")}, ensure_ascii=False)
@@ -872,6 +965,14 @@ def _spaced(v: Any, key: str = "") -> Any:
     return spaced(v) if isinstance(v, str) else v
 
 
+def _verbatim(snippet: Any, source: str) -> bool:
+    """A code excerpt must be copied from the fetched source files (whitespace-insensitive)."""
+    if not isinstance(snippet, str) or not snippet.strip():
+        return False
+    squash = lambda t: re.sub(r"\s+", "", t)
+    return squash(snippet) in squash(source)
+
+
 def _numberless_figure(art: dict, template: str) -> dict | None:
     if template == "timeline" and art.get("events"):
         return {"type": "timeline", "events": [{"date": e.get("date", ""), "text": e.get("text", "")} for e in art["events"]]}
@@ -889,6 +990,10 @@ def _article_text(a) -> str:
         for x in b.get(k) or []:
             if isinstance(x, dict):
                 parts.append("：".join(str(x.get(f)) for f in ("title", "date", "name", "text", "desc", "display") if x.get(f)))
+    for sec in b.get("sections") or []:
+        if isinstance(sec, dict):
+            parts.append(str(sec.get("heading") or ""))
+            parts += [str(x) for x in sec.get("paragraphs") or []]
     for k in ("oneline", "method", "findings", "limits", "same", "diff", "why"):
         if b.get(k):
             parts.append(str(b[k]))

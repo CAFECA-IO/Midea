@@ -139,5 +139,11 @@ def article_for(title: str, template: str) -> dict:
     if title.startswith("續作："):
         art["title"] = "續作：" + art["title"]
         art["dek"] = "依讀者的問題，再看一次這個題目。"
+    art.setdefault("sections", [
+        {"heading": "發生了什麼", "paragraphs": [art["dek"], "（示範資料：正式版由 AI 依多個來源寫成 2000 字以上的分析。）"]},
+        {"heading": "背後的脈絡", "paragraphs": [art.get("why") or art["dek"]]},
+        {"heading": "接下來看什麼", "paragraphs": ["之後的發展會在續作裡追蹤。"]}])
+    art.setdefault("follow", ["這件事接下來會怎麼發展？", "還有哪些人會受到影響？"])
+    art.setdefault("cover_prompt", "an abstract editorial illustration of light and data on a dark desk")
     art["sources"] = []
     return art

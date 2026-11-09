@@ -169,7 +169,7 @@ export declare function KindChip(props: KindChipProps): React.ReactElement;
 export interface ArticleFigureProps { wide?: string; narrow?: string; caption?: React.ReactNode | ((selected: number | null) => React.ReactNode);
   selected?: number; onSelect?: (index: number) => void; compact?: boolean }
 export declare function ArticleFigure(props: ArticleFigureProps): React.ReactElement | null;
-export interface ArticleTileProps { href: string; kind: ArticleKind; kindLabel: string; source?: string; figure?: string; title: string; dek?: string;
+export interface ArticleTileProps { href: string; image?: string | null; alt?: string; kind: ArticleKind; kindLabel: string; source?: string; figure?: string; title: string; dek?: string;
   meta?: React.ReactNode; badge?: React.ReactNode; cols?: number; rows?: number }
 export declare function ArticleTile(props: ArticleTileProps): React.ReactElement;
 export interface ArticleReactionsProps { options: { value: ArticleReaction; label: string; icon?: IconName }[]; value?: ArticleReaction[];
@@ -180,8 +180,12 @@ export declare function FollowupMeter(props: FollowupMeterProps): React.ReactEle
 export interface QuizCardProps { question: string; options: string[]; mine?: number | null; answer?: number | null; right?: number | null;
   eyebrow?: string; onAnswer?: (index: number) => void }
 export declare function QuizCard(props: QuizCardProps): React.ReactElement;
-export interface SourceListProps { sources: { title?: string; url: string; source?: string }[]; label?: string }
+export interface SourceListProps { sources: { n?: number; title?: string; url: string; source?: string }[]; label?: string }
 export declare function SourceList(props: SourceListProps): React.ReactElement;
+export interface ArticleCoverProps { image?: string | null; alt?: string; caption?: React.ReactNode }
+export declare function ArticleCover(props: ArticleCoverProps): React.ReactElement | null;
+export interface CodeExcerptProps { path: string; code: string; lang?: string; note?: string; href?: string | null }
+export declare function CodeExcerpt(props: CodeExcerptProps): React.ReactElement;
 
 declare global { interface Window { Midea: { Logo: typeof Logo; Icon: typeof Icon; Button: typeof Button; SignInButton: typeof SignInButton;
   SearchField: typeof SearchField; SegmentedTabs: typeof SegmentedTabs; SiteHeader: typeof SiteHeader; SiteFooter: typeof SiteFooter;
@@ -194,4 +198,5 @@ declare global { interface Window { Midea: { Logo: typeof Logo; Icon: typeof Ico
   ChatPanel: typeof ChatPanel; WishCard: typeof WishCard; WishComposer: typeof WishComposer; AskActor: typeof AskActor; AnswerTile: typeof AnswerTile;
   TopicHeader: typeof TopicHeader; ScheduleDay: typeof ScheduleDay; ScheduleWeek: typeof ScheduleWeek;
   KindChip: typeof KindChip; ArticleFigure: typeof ArticleFigure; ArticleTile: typeof ArticleTile; ArticleReactions: typeof ArticleReactions;
-  FollowupMeter: typeof FollowupMeter; QuizCard: typeof QuizCard; SourceList: typeof SourceList } } }
+  FollowupMeter: typeof FollowupMeter; QuizCard: typeof QuizCard; SourceList: typeof SourceList;
+  ArticleCover: typeof ArticleCover; CodeExcerpt: typeof CodeExcerpt } } }

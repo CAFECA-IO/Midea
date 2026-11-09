@@ -21,7 +21,15 @@
   }
 
   /* ------------------------------------------------------------ helpers */
-  function P(text, i, cls) { return h('p', { key: 'p' + i, className: cls || 'art-p', 'data-para': i }, text); }
+  /* [1] [2][3] → links to the numbered sources */
+  function rich(text) {
+    var parts = String(text || '').split(/(\[\d{1,2}\])/);
+    return parts.map(function (t, i) {
+      var m = t.match(/^\[(\d{1,2})\]$/);
+      return m ? h('a', { key: i, href: '#src-' + m[1], className: 'art-cite', 'aria-label': '來源 ' + m[1] }, m[1]) : t;
+    });
+  }
+  function P(text, i, cls) { return h('p', { key: 'p' + i, className: cls || 'art-p', 'data-para': i }, rich(text)); }
   function Why(p) { return p.text ? h('div', { className: 'art-why' }, h('b', null, '為什麼重要'), h('span', null, p.text)) : null; }
 
   /* ------------------------------------------------------------ the seven templates */
@@ -80,6 +88,28 @@
       default:
         return h(React.Fragment, null, figure(null), paras, h(Why, { text: b.why }));
     }
+  }
+
+  /* 深度分析（每篇都有）、程式碼導讀（GitHub）、接下來追蹤 */
+  function Analysis(p) {
+    var b = p.a.body || {}, n = 100;
+    var secs = (b.sections || []).filter(function (x) { return x && x.heading; });
+    var code = b.code || [];
+    var repo = (p.a.sources || []).filter(function (x) { return /github\.com\/[^/]+\/[^/]+$/.test(x.url || ''); })[0];
+    return h(React.Fragment, null,
+      secs.map(function (sec, i) {
+        return h('section', { key: i, className: 'art-sec', 'aria-labelledby': 'sec-' + i },
+          h('h2', { id: 'sec-' + i, className: 'art-sec-h' }, sec.heading),
+          (sec.paragraphs || []).map(function (t) { return P(t, n++); }));
+      }),
+      code.length ? h('section', { className: 'art-sec', 'aria-labelledby': 'code-h' }, h('h2', { id: 'code-h', className: 'art-sec-h' }, '程式碼導讀'),
+        code.map(function (c, i) {
+          return h(M.CodeExcerpt, { key: i, path: c.path, lang: c.lang, code: c.snippet, note: c.note,
+            href: repo ? repo.url + '/blob/HEAD/' + c.path : null });
+        })) : null,
+      b.follow && b.follow.length ? h('div', { className: 'art-follow' }, h('b', null, '接下來追蹤'),
+        h('ul', null, b.follow.map(function (f, i) { return h('li', { key: i }, f); })),
+        h('span', { className: 'md-meta' }, '想看哪一個？按「想看續作」或在下方提問，+1 多的會寫成續作。')) : null);
   }
 
   /* 數據故事：圖固定在上方，段落捲到哪裡、圖就標到哪裡 */
@@ -223,8 +253,9 @@
       h('h1', { className: 'art-title' }, d.title),
       h('p', { className: 'art-dek' }, d.dek),
       d.sequel_of ? h('p', { className: 'md-meta' }, '續作 · ', d.body.readers ? '依 ' + d.body.readers + ' 位讀者的「想看續作」 · ' : '', '原文：', h('a', { href: '/news/' + d.sequel_of.slug }, d.sequel_of.title)) : null,
-      h('span', { className: 'md-meta' }, 'Midea 報導 · ' + d.date_label + ' ' + d.published + ' · 閱讀 ' + d.minutes + ' 分鐘 · 來源：' + (src.source || '')),
-      h(M.SourceList, { sources: d.sources }));
+      h('span', { className: 'md-meta' }, 'Midea 報導 · ' + d.date_label + ' ' + d.published + ' · 閱讀 ' + d.minutes + ' 分鐘 · ' + d.sources.length + ' 個來源'),
+      h(M.SourceList, { sources: d.sources }),
+      h(M.ArticleCover, { image: d.cover, alt: '' }));
     var rail = h('aside', { className: 'art-rail', 'aria-label': '回饋與接下來' },
       h('div', { className: 'art-card' }, h('b', null, '你覺得這篇？'), reacts,
         h('span', { className: 'md-meta' }, '不用登入也可以按 · 你的反應會決定之後寫什麼、做什麼影片')),
@@ -248,7 +279,7 @@
     return h(React.Fragment, null,
       h('div', { className: 'art' },
         h('article', { className: 'art-main', ref: root, style: { position: 'relative' } }, head,
-          h('div', { className: 'art-body' }, h(Body, { a: d })),
+          h('div', { className: 'art-body' }, h(Body, { a: d }), h(Analysis, { a: d })),
           h(SelectionBar, { root: root, title: d.title, onAsk: function (t, i) { setDraft({ quote: t, para: i, focus: Date.now() }); }, onVideo: function () { if ((d.mine || []).indexOf('video') < 0) toggle('video', true); S.toast('已記下：想看做成影片'); } }),
           mobile ? rail : null, after),
         mobile ? null : rail),

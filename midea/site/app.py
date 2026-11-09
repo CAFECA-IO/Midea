@@ -67,7 +67,7 @@ class State:
             self.store.one("SELECT status FROM wish_card WHERE id=?", (cid,)) or {"status": ""})["status"] == "open" else None
         self.worker = Worker(self.com, actor_bible)
         from .news import Newsroom
-        self.news = Newsroom(self.store, community=self.com, catalog=self.cat)
+        self.news = Newsroom(self.store, community=self.com, catalog=self.cat, cover_dir=data_dir() / "news")
 
 
 def actor_bible(handle: str) -> dict | None:
@@ -282,6 +282,19 @@ def media_captions(vid: str):
     srt = Path(v.srt).read_text(encoding="utf-8")
     vtt = "WEBVTT\n\n" + re.sub(r"(\d\d:\d\d:\d\d),(\d\d\d)", r"\1.\2", srt)
     return Response(vtt, media_type="text/vtt", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/media/n/{slug}.jpg")
+def media_news_cover(slug: str):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}-[0-9a-f]{6}", slug):
+        raise HTTPException(404)
+    a = st().news.get(slug)
+    if not a or not a["cover"] or a["status"] != "live":
+        raise HTTPException(404)
+    f = data_dir() / "news" / a["cover"]
+    if not f.exists():
+        raise HTTPException(404)
+    return FileResponse(f, media_type="image/jpeg" if f.suffix == ".jpg" else "image/png", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/media/a/{handle}.jpg")

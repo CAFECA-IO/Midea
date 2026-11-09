@@ -314,7 +314,7 @@
     return h(M.BentoGrid, { row: 'hero' }, arts.slice(0, 5).map(function (a, i) {
       var sh = shape[i] || [1, 1];
       return h(M.ArticleTile, { key: a.slug, href: '/news/' + a.slug, kind: a.kind, kindLabel: a.kind_label, source: a.sources[0] && a.sources[0].source,
-        figure: i === 0 && a.lead_fig ? a.lead_fig : a.mini, title: a.title, dek: a.dek, cols: sh[0], rows: sh[1], meta: articleMeta(a),
+        image: a.cover, figure: i === 0 && a.lead_fig ? a.lead_fig : a.mini, title: a.title, dek: a.dek, cols: sh[0], rows: sh[1], meta: articleMeta(a),
         badge: a.sequel_of ? h(M.InfluenceTag, null, '讀者想看的續作') : null });
     }));
   }
