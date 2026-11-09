@@ -262,7 +262,7 @@ PICK_SYSTEM = (
     "You are the morning editor of Midea, a Traditional Chinese AI video platform. From the candidate list pick exactly "
     "{n} topics for today's reports. Rules: include every candidate marked must=true; include at least one 'repo' and one "
     "'paper' candidate when available; prefer stories with concrete numbers, broad interest, technology/AI/science/culture; "
-    "avoid duplicates of the recent titles; avoid tragedies, crime victims, accusations against private persons, and "
+    "never pick a story already covered in recent_titles (same event in another language counts); avoid tragedies, crime victims, accusations against private persons, and "
     "medical/investment advice. For each pick score how well each template fits (0–1): {templates}. "
     "Return {{\"picks\": [{{\"index\": <int>, \"angle\": \"一句話角度（繁中）\", \"fit\": {{\"brief\": 0.0, ...}}}}]}}.")
 
@@ -445,7 +445,9 @@ class Newsroom:
                 "must": bool(c.get("must"))} for i, c in enumerate(cands[:80])]
         sys = PICK_SYSTEM.format(n=n, templates=json.dumps({k: v["fit"] for k, v in TEMPLATES.items()}, ensure_ascii=False))
         try:
-            out = llm().json("news_pick", sys, json.dumps(lst, ensure_ascii=False), max_tokens=4096)
+            recent = [r["title"] for r in self.s.q("SELECT title FROM article WHERE day>=? ORDER BY day DESC LIMIT 40",
+                                                  ((now_local().date() - timedelta(days=7)).isoformat(),))]
+            out = _ask("news_pick", sys, json.dumps({"recent_titles": recent, "candidates": lst}, ensure_ascii=False))
             picks = [p for p in (out.get("picks") or []) if isinstance(p, dict) and isinstance(p.get("index"), int) and 0 <= p["index"] < len(cands)]
         except Exception as e:  # noqa: BLE001
             log.warning("pick fell back to rules: %s", e)
@@ -503,10 +505,10 @@ class Newsroom:
         sys = WRITE_SYSTEM.format(template=TEMPLATES[template]["name"], fit=TEMPLATES[template]["fit"], schema=SCHEMAS[template])
         user = json.dumps({"angle": angle, "kind": KINDS[c["kind"]], "source_name": c.get("source"), "url": c.get("url"),
                            "title": c["title"], "SOURCE": source}, ensure_ascii=False)
-        art = llm().json("news_write", sys, user, max_tokens=4096)
+        art = _ask("news_write", sys, user)
         issue = _figure_issue(art.get("figure"), source)
         if issue:
-            art = llm().json("news_write", sys, user + f"\n\nFix the figure: {issue}", max_tokens=4096)
+            art = _ask("news_write", sys, user + f"\n\nFix the figure: {issue}")
             if _figure_issue(art.get("figure"), source):
                 art["figure"] = _numberless_figure(art, template)
         art = _spaced(art)
@@ -753,7 +755,7 @@ class Newsroom:
         payload = [{"id": a["id"], "title": a["title"], "dek": a["dek"], "template": TEMPLATES[a["template"]]["name"],
                     "sources": [s.get("source") for s in json.loads(a["sources"])]} for a in arts]
         try:
-            out = llm().json("news_weekly", WEEKLY_SYSTEM, json.dumps(payload, ensure_ascii=False), max_tokens=4096)
+            out = _ask("news_weekly", WEEKLY_SYSTEM, json.dumps(payload, ensure_ascii=False))
             for s in out.get("scores") or []:
                 if isinstance(s, dict) and s.get("id") in default:
                     default[s["id"]] = {"total": float(s.get("total") or 0), "reason": str(s.get("reason") or "")[:80],
@@ -790,6 +792,20 @@ class Newsroom:
 
 
 # ================================================================================================ helpers
+def _ask(task: str, system: str, user: str, max_tokens: int = 4096) -> Any:
+    """Qwen JSON with one retry when the server is restarting (503 / connection reset)."""
+    from ..providers.llm import llm
+    try:
+        return llm().json(task, system, user, max_tokens=max_tokens)
+    except Exception as e:  # noqa: BLE001
+        import httpx
+        if not isinstance(e, (httpx.HTTPError, ConnectionError)):
+            raise
+        log.info("%s: %s — retrying in 20 s", task, e)
+        time.sleep(20)
+        return llm().json(task, system, user, max_tokens=max_tokens)
+
+
 def validate(art: dict, template: str) -> list[str]:
     p = []
     for k in ("title", "dek"):
