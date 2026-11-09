@@ -34,6 +34,32 @@ def test_fact_check_numbers_must_come_from_source():
     assert unverified_numbers({"type": "bars", "rows": [{"label": "rea", "value": 201065}]}, "rea +201,065") == []
 
 
+def test_mixed_units_and_spacing():
+    from midea.site.news import mixed_units, spaced
+    bad = {"type": "bars", "unit": "依各行標示", "rows": [{"label": "AI代理同時作業（個）", "value": 5000}, {"label": "每月提交量（億次）", "value": 14}]}
+    assert mixed_units(bad)
+    assert mixed_units({"type": "bars", "unit": "數值", "rows": [{"label": "速度提升", "value": 50, "display": "50%"}, {"label": "秒數", "value": 6, "display": "6 秒"}]})
+    assert not mixed_units({"type": "bars", "unit": "%", "rows": [{"label": "SOX", "value": -12, "display": "−12%"}, {"label": "Nvidia", "value": -9, "display": "逾 −9%"}]})
+    from midea.site.news_fixtures import ARTICLES
+    assert not any(mixed_units(a["figure"]) for a in ARTICLES.values())
+    assert spaced("OpenAI傳以1.25兆美元估值") == "OpenAI 傳以 1.25 兆美元估值"
+    assert spaced("https://x.com/中文") == "https://x.com/中文"
+
+
+def test_pick_keeps_one_repo_and_one_paper(monkeypatch):
+    from midea.site import news
+    monkeypatch.setattr(news, "is_mock", lambda: False)
+    cands = [{"kind": "news", "title": f"n{i}"} for i in range(6)] + [{"kind": "repo", "title": "r"}, {"kind": "paper", "title": "p"}]
+
+    class L:
+        def json(self, *a, **k):
+            return {"picks": [{"index": i, "fit": {"brief": 0.9}} for i in range(5)]}
+    monkeypatch.setattr("midea.providers.llm.llm", lambda: L())
+    room = news.Newsroom.__new__(news.Newsroom)
+    kinds = [cands[p["index"]]["kind"] for p in room.pick(cands, 5)]
+    assert len(kinds) == 5 and "repo" in kinds and "paper" in kinds
+
+
 def test_every_fixture_figure_renders():
     from midea.site import news_svg
     from midea.site.news_fixtures import ARTICLES

@@ -268,8 +268,12 @@ PICK_SYSTEM = (
 
 WRITE_SYSTEM = (
     "You write a short report for Midea (Traditional Chinese, Taiwan usage, plain and calm, no exclamation marks, no emoji, "
-    "no hype words like 超/爆/必看). 24-hour time; dates like 11/9（一）. Keep product and paper names in their original "
-    "language. Use ONLY facts and numbers from the SOURCE; never invent numbers, quotes or names. If the source lacks a "
+    "no hype words like 超/爆/必看). Put a space between Chinese and Latin letters or digits (例：OpenAI 傳以 1.25 兆美元). "
+    "24-hour time; dates like 11/9（一）. Keep product and paper names in their original "
+    "language. Use ONLY facts and numbers from the SOURCE; never invent numbers, quotes or names. A chart compares like with "
+    "like: every row/side in one figure has the SAME unit and measures the same kind of thing (never mix counts, percents, "
+    "seconds and money in one chart); if the source has no comparable set, use another figure type or fewer rows. "
+    "If the source lacks a "
     "number, leave it out. Write for curious general readers; explain jargon in one clause. "
     "Template: {template} — {fit}. Return JSON with these fields:\n{schema}\n"
     "Common fields: title (≤ 30 字), dek (≤ 60 字), why (為什麼重要, ≤ 60 字), quiz (optional: {{\"q\": str, \"options\": [3 short strings], "
@@ -371,7 +375,7 @@ class Newsroom:
 
     def _daily(self, day: date) -> dict:
         n = int(cfg("per_day", 5))
-        have = self.s.q("SELECT id FROM article WHERE day=?", (day.isoformat(),))
+        have = self.s.q("SELECT id FROM article WHERE day=? AND status='live'", (day.isoformat(),))
         if len(have) >= n:
             return {"articles": len(have), "note": "already published"}
         cands = self.candidates(day)
@@ -391,10 +395,14 @@ class Newsroom:
                 log.warning("write failed for %s: %s", c.get("title"), e)
                 continue
             used[t] += 1
-            made.append(self.publish(day, c, t, art, p.get("fit") or {}, rank=len(have) + len(made)))
+            made.append(self.publish(day, c, t, art, p.get("fit") or {}, rank=self._next_rank(day)))
         if not made:
             raise RuntimeError("五篇都沒有寫成")
         return {"articles": [m["slug"] for m in made], "templates": [m["template"] for m in made]}
+
+    def _next_rank(self, day: date) -> int:
+        r = self.s.one("SELECT MAX(rank) m FROM article WHERE day=?", (day.isoformat(),))
+        return 0 if r is None or r["m"] is None else int(r["m"]) + 1
 
     def candidates(self, day: date) -> list[dict]:
         if is_mock():
@@ -453,6 +461,20 @@ class Newsroom:
             if p["index"] not in seen:
                 res.append(p)
                 seen.add(p["index"])
+        for want in ("repo", "paper"):                          # at least one GitHub and one paper when there are any
+            if any(cands[x["index"]]["kind"] == want for x in res):
+                continue
+            alt = next((i for i, c in enumerate(cands) if c["kind"] == want and i not in seen), None)
+            if alt is None:
+                continue
+            slot = next((k for k in range(len(res) - 1, -1, -1) if not cands[res[k]["index"]].get("must")
+                         and sum(cands[x["index"]]["kind"] == cands[res[k]["index"]]["kind"] for x in res) > 1), None)
+            if slot is not None and len(res) >= n:
+                seen.discard(res[slot]["index"])
+                res[slot] = {"index": alt, "fit": {}}
+            else:
+                res.append({"index": alt, "fit": {}})
+            seen.add(alt)
         for want in ("repo", "paper", "news"):                  # rule fallback: fill by kind, newest first
             for i, c in enumerate(cands):
                 if len(res) >= n:
@@ -482,12 +504,12 @@ class Newsroom:
         user = json.dumps({"angle": angle, "kind": KINDS[c["kind"]], "source_name": c.get("source"), "url": c.get("url"),
                            "title": c["title"], "SOURCE": source}, ensure_ascii=False)
         art = llm().json("news_write", sys, user, max_tokens=4096)
-        bad = unverified_numbers(art.get("figure"), source)
-        if bad:
-            fix = user + f"\n\nThe figure used numbers that are not in the SOURCE: {bad}. Use only numbers from the SOURCE, or drop that row."
-            art = llm().json("news_write", sys, fix, max_tokens=4096)
-            if unverified_numbers(art.get("figure"), source):
+        issue = _figure_issue(art.get("figure"), source)
+        if issue:
+            art = llm().json("news_write", sys, user + f"\n\nFix the figure: {issue}", max_tokens=4096)
+            if _figure_issue(art.get("figure"), source):
                 art["figure"] = _numberless_figure(art, template)
+        art = _spaced(art)
         problems = validate(art, template)
         if problems:
             raise ValueError("; ".join(problems))
@@ -531,7 +553,7 @@ class Newsroom:
              "sources": json.loads(a["sources"]), "counts": self.counts(a["id"]), "status": a["status"],
              "sequel_threshold": int(cfg("sequel_threshold", 20)), "date_label": _day_label(a["day"]),
              "published": now_local(a["created"]).strftime("%H:%M"), "mini": news_svg.mini(fig),
-             "lead_fig": news_svg.render(fig)["wide"] if a["rank"] == 0 else "", "video": self.video_of(a)}
+             "lead_fig": news_svg.render(fig)["wide"], "video": self.video_of(a)}
         if a["sequel_of"]:
             o = self.s.one("SELECT slug, title FROM article WHERE id=?", (a["sequel_of"],))
             d["sequel_of"] = dict(o) if o else None
@@ -785,6 +807,53 @@ def validate(art: dict, template: str) -> list[str]:
     if cat and cat not in ("ads",):
         p.append(f"rules: {cat}")
     return p
+
+
+_GENERIC_UNIT = re.compile(r"^(數值|數字|依各行.*|各.*|混合|mixed|various|n/?a|)$", re.I)
+
+
+def mixed_units(spec: dict | None) -> bool:
+    """A bar chart whose rows measure different things (count vs percent vs seconds) — misleading on one scale."""
+    if not spec or spec.get("type") not in ("bars", "ranking", "compare"):
+        return False
+    rows = spec.get("rows") or spec.get("items") or spec.get("sides") or []
+    if len(rows) < 2:
+        return False
+    if spec.get("type") == "bars" and _GENERIC_UNIT.match(str(spec.get("unit") or "").strip()):
+        tails = {re.sub(r"[\d.,+\-−\s約逾]", "", str(r.get("display") or "")) for r in rows}
+        if len(tails) != 1 or tails == {""}:
+            return True
+    paren = {m.group(1) for r in rows for m in [re.search(r"[（(]([^）)]+)[）)]\s*$", str(r.get("label") or r.get("name") or ""))] if m}
+    suffix = {re.sub(r"[\d.,+\-−\s約逾]", "", str(r.get("display") or "")) for r in rows if r.get("display")}
+    return len(paren) > 1 or len(suffix) > 1
+
+
+def _figure_issue(spec: dict | None, source: str) -> str | None:
+    bad = unverified_numbers(spec, source)
+    if bad:
+        return f"numbers not in the SOURCE: {bad}; use only numbers from the SOURCE, or drop that row"
+    if mixed_units(spec):
+        return "rows use different units or measure different things; keep only rows with one shared unit, or use another figure type"
+    return None
+
+
+_CJK = r"\u3400-\u9fff\uf900-\ufaff"
+
+
+def spaced(t: str) -> str:
+    """盤古之白：中文與英數之間加空格（不動網址）。"""
+    if not isinstance(t, str) or "://" in t:
+        return t
+    t = re.sub(rf"([{_CJK}])([A-Za-z0-9$])", r"\1 \2", t)
+    return re.sub(rf"([A-Za-z0-9%])([{_CJK}])", r"\1 \2", t)
+
+
+def _spaced(v: Any, key: str = "") -> Any:
+    if isinstance(v, dict):
+        return {k: (x if k in ("url", "type") else _spaced(x, k)) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_spaced(x, key) for x in v]
+    return spaced(v) if isinstance(v, str) else v
 
 
 def _numberless_figure(art: dict, template: str) -> dict | None:
