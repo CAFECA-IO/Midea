@@ -9,6 +9,7 @@
   midea site admin luphia                              # 指定管理者（審核上架、檢舉、許願製作；GPU 服務）
   midea site news                                      # 立即寫今天的 5 篇報導（已寫過就跳過；--force 重寫）
   midea site news-weekly                               # 立即用上週的報導建立兩部報導影片（編輯選、觀眾選）
+  midea site news-covers                               # 補今天缺的文章封面（--force 全部重畫）
   midea approve <project> scene_plan [--reject --note "..."]
   midea services status | up qwen | down h3
   midea tools | pipelines | doctor | qa video.mp4
@@ -72,12 +73,26 @@ def cmd_site(a: argparse.Namespace) -> None:
             return
         print("已設為管理者：", st().com.grant_admin(a.who))
         return
-    if a.action in ("news", "news-weekly"):
+    if a.action in ("news", "news-weekly", "news-covers"):
         import json as _json
+        from .gpu import scheduler
         from .site.app import st
         n = st().news
-        out = n.run_daily(force=a.force) if a.action == "news" else n.run_weekly(force=a.force)
-        print(_json.dumps(out, ensure_ascii=False, indent=2))
+        try:
+            if a.action == "news":
+                out = n.run_daily(force=a.force)
+            elif a.action == "news-weekly":
+                out = n.run_weekly(force=a.force)
+            else:
+                from .site.programming import now_local
+                day = now_local().date().isoformat()
+                rows = n.s.q("SELECT slug FROM article WHERE day=? AND status='live'" + ("" if a.force else " AND cover IS NULL"), (day,))
+                out = {"covers": n.make_covers([r["slug"] for r in rows])}
+            print(_json.dumps(out, ensure_ascii=False, indent=2))
+        finally:                     # do not leave GPU services this command started running without an owner
+            for sv in scheduler().services.values():
+                if getattr(sv, "proc", None) is not None:
+                    sv.stop()
         return
     if a.action == "plan-week":
         from datetime import timedelta
@@ -236,7 +251,7 @@ def main(argv: list[str] | None = None) -> None:
     m.add_argument("-y", "--yes", action="store_true", help="auto-approve all gates")
     m.set_defaults(fn=cmd_make)
     s = sp.add_parser("serve"); s.add_argument("--host"); s.add_argument("--port", type=int); s.set_defaults(fn=cmd_serve)
-    w = sp.add_parser("site", help="public site midea.cafeca.io"); w.add_argument("action", nargs="?", default="serve", choices=["serve", "plan-week", "admin", "news", "news-weekly"])
+    w = sp.add_parser("site", help="public site midea.cafeca.io"); w.add_argument("action", nargs="?", default="serve", choices=["serve", "plan-week", "admin", "news", "news-weekly", "news-covers"])
     w.add_argument("who", nargs="?", help="admin：CAFECA 代號或帳戶地址（先登入網站一次）")
     w.add_argument("--force", action="store_true", help="news / news-weekly：今天或本週已經跑過也重跑")
     w.add_argument("--host"); w.add_argument("--port", type=int); w.set_defaults(fn=cmd_site)
