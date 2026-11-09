@@ -355,7 +355,7 @@ class Community:
         return [q for q in self.questions(actor, viewer, order="new", limit=50) if q["mine"]]
 
     # ------------------------------------------------------------ reports & reviews
-    TABLE = {"chat": "chat", "wish": "wish_card", "question": "question"}
+    TABLE = {"chat": "chat", "wish": "wish_card", "question": "question", "article_q": "article_question"}
 
     def report(self, viewer: int, kind: str, target: int, reason: str | None) -> dict:
         if kind not in self.TABLE:

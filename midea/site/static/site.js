@@ -108,7 +108,7 @@
 
   /* ------------------------------------------------------------ shell */
   var NAV = [{ label: '首頁', href: '/' }, { label: '直播', href: '/live' }, { label: '節目表', href: '/schedule' },
-    { label: '主題', href: '/#topics' }, { label: '演員', href: '/#actors' }, { label: '許願牆', href: '/wishes' }];
+    { label: '主題', href: '/#topics' }, { label: '報導', href: '/news' }, { label: '演員', href: '/#actors' }, { label: '許願牆', href: '/wishes' }];
 
   function Account() {
     var v = useMe();
@@ -124,7 +124,7 @@
 
   function Shell(p) {
     var path = location.pathname;
-    var items = NAV.map(function (n) { return Object.assign({}, n, { active: n.href === path }); });
+    var items = NAV.map(function (n) { return Object.assign({}, n, { active: n.href === path || (n.href === '/news' && path.indexOf('/news/') === 0) }); });
     return h('div', { className: 'site' },
       h('div', { className: 'site-wrap' },
         h(M.SiteHeader, { items: items, search: false, account: h(Account) }),
@@ -134,7 +134,7 @@
         { label: '首頁', href: '/', icon: 'home', active: path === '/' },
         { label: '直播', href: '/live', icon: 'play', active: path === '/live' },
         { label: '節目表', href: '/schedule', icon: 'calendar', active: path === '/schedule' },
-        { label: '主題', href: '/#topics', icon: 'grid' },
+        { label: '報導', href: '/news', icon: 'news', active: path.indexOf('/news') === 0 },
         { label: '許願', href: '/wishes', icon: 'star', active: path === '/wishes' }] }),
       h(SignIn), h(AskDialog));
   }
@@ -296,7 +296,30 @@
   }
   function fmtTime(s) { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
 
+
+  /* ------------------------------------------------------------ 每日報導: the Bento shared by the home page and /news */
+  var AREACT = [{ value: 'helpful', label: '有幫助', icon: 'check' }, { value: 'sequel', label: '想看續作', icon: 'pen' },
+    { value: 'video', label: '做成影片', icon: 'film' }, { value: 'question', label: '有疑問', icon: 'chat' }];
+  function articleMeta(a) {
+    var c = a.counts || {};
+    var out = [h('span', { key: 's' }, h(M.Icon, { name: 'pen', size: 13 }), '想看續作 ' + (c.sequel || 0) + ' / ' + a.sequel_threshold)];
+    if (a.video) out.push(h('span', { key: 'v' }, h(M.Icon, { name: 'film', size: 13 }), a.video.status === 'ready' ? '已做成影片' : '影片製作中 · ' + a.video.label));
+    else out.push(h('span', { key: 'v' }, h(M.Icon, { name: 'film', size: 13 }), '做成影片 ' + (c.video || 0)));
+    return out;
+  }
+  function newsBento(arts) {
+    var n = arts.length;
+    var shape = n >= 5 ? [[2, 2], [1, 1], [1, 1], [1, 1], [1, 1]] : n === 4 ? [[2, 2], [1, 1], [1, 1], [2, 1]] : n === 3 ? [[2, 2], [2, 1], [2, 1]]
+      : n === 2 ? [[2, 2], [2, 2]] : [[4, 2]];
+    return h(M.BentoGrid, { row: 'hero' }, arts.slice(0, 5).map(function (a, i) {
+      var sh = shape[i] || [1, 1];
+      return h(M.ArticleTile, { key: a.slug, href: '/news/' + a.slug, kind: a.kind, kindLabel: a.kind_label, source: a.sources[0] && a.sources[0].source,
+        figure: i === 0 && a.lead_fig ? a.lead_fig : a.mini, title: a.title, dek: a.dek, cols: sh[0], rows: sh[1], meta: articleMeta(a),
+        badge: a.sequel_of ? h(M.InfluenceTag, null, '讀者想看的續作') : null });
+    }));
+  }
+
   window.Site = { useMobile: useMobile, reducedMotion: reducedMotion, Ambient: Ambient, useImmersive: useImmersive, pressHandlers: pressHandlers, fmtTime: fmtTime,
     askNickname: askNickname, requireWriter: requireWriter, report: report, toast: toast, api: api, useMe: useMe, setMe: setMe, openSignIn: openSignIn, requireLogin: requireLogin, mount: mount,
-    cast: cast, videoLine: videoLine, viewTracker: viewTracker, share: share, finishLogin: finish };
+    cast: cast, videoLine: videoLine, newsBento: newsBento, articleMeta: articleMeta, AREACT: AREACT, viewTracker: viewTracker, share: share, finishLogin: finish };
 })();

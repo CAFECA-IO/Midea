@@ -90,6 +90,28 @@
       d.schedule_note ? h('p', { className: 'md-meta sec-meta' }, d.schedule_note + ' · 下週節目表每週一 09:00 公布') : null);
   }
 
+  /* ------------------------------------------------------------ 今日報導（本週每晚之後） */
+  function News() {
+    var _d = React.useState(null), d = _d[0], set = _d[1];
+    React.useEffect(function () { S.api('/news/today').then(set).catch(function () {}); }, []);
+    if (!d || !d.articles.length) return null;
+    var meta = h('span', { className: 'news-head-meta' }, h('span', { className: 'md-meta' }, d.date_label + ' ' + d.at + ' 更新 · ' + d.articles.length + ' 篇 · 讀過 ' + d.sources + ' 則來源'),
+      h('a', { href: '/news', className: 'md-nav-a' }, '全部報導'));
+    return h('section', { className: 'sec', id: 'news', 'aria-labelledby': 'news-h' },
+      h(M.SectionHeader, { id: 'news-h', title: '今日報導', tag: 'AI 每天 ' + d.at + ' 整理', action: meta }),
+      S.newsBento(d.articles),
+      d.followups.length ? h('div', { className: 'news-follow' }, h('h3', { className: 'news-follow-h' }, '讀者帶出來的續作與影片'),
+        h('div', { className: 'news-follow-row' }, d.followups.map(function (f) { return h(Followup, { key: f.type + f.slug, f: f }); }))) : null);
+  }
+  function Followup(p) {
+    var f = p.f, vid = f.type === 'video' && f.video;
+    var href = vid && vid.status === 'ready' ? '/watch/' + vid.id : '/news/' + f.slug;
+    return h('a', { className: 'news-follow-item', href: href },
+      vid && vid.image ? h('img', { src: vid.image, alt: '' }) : h('span', { className: 'news-follow-ic', 'aria-hidden': 'true' }, h(M.Icon, { name: f.type === 'video' ? 'film' : 'pen', size: 22 })),
+      h('span', null, h('span', { className: 'news-follow-tag' }, f.type === 'video' ? (vid.status === 'ready' ? '影片 · ' + vid.label : '影片製作中 · ' + vid.label) : '續作'),
+        h('b', null, f.title), h('span', { className: 'md-meta' }, f.date_label)));
+  }
+
   /* ------------------------------------------------------------ 最多人看 */
   function Ranking(p) {
     var _t = React.useState('week'), per = _t[0], setPer = _t[1];
@@ -168,7 +190,7 @@
     function onPoll(poll) { set(Object.assign({}, d, { poll: poll })); }
     return h(React.Fragment, null,
       h('h1', { className: 'md-sr' }, 'Midea 首頁'),
-      h(Hero, { d: d, onPoll: onPoll }), h(Nightly, { d: d }), h(Ranking, { d: d }), h(Topics, { d: d }), h(WishWall), h(Favorites), h(Actors, { d: d }));
+      h(Hero, { d: d, onPoll: onPoll }), h(Nightly, { d: d }), h(News), h(Ranking, { d: d }), h(Topics, { d: d }), h(WishWall), h(Favorites), h(Actors, { d: d }));
   }
 
   S.mount(Home);

@@ -6,6 +6,7 @@ and adds the routes that need the audience database (feedback, review queue).
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -169,6 +170,11 @@ def review_list(state) -> list[dict]:
     return out
 
 
+def n_cfg(key, default):
+    from .news import cfg
+    return cfg(key, default)
+
+
 def install(get) -> None:
     """`get()` returns the site State (created lazily, so importing the site does not open the database)."""
     board.AUTH.update(mode="cafeca", resolve=lambda request: resolver(get())(request))
@@ -194,6 +200,36 @@ def install(get) -> None:
             apply_listing(out["listing"]["target"], out["listing"]["decision"], u.account, str(body.get("note") or ""))
             get().cat.refresh(force=True)
         return {"ok": True, **out}
+
+    @sa.get("/api/news")
+    def _news(request: Request) -> dict:
+        """Admins: the last 14 days of reports with feedback scores, and the scheduler runs."""
+        access.require_admin(request)
+        n = get().news
+        rows = n.s.q("SELECT * FROM article ORDER BY day DESC, rank LIMIT 70")
+        return {"articles": [n.card(a) | {"feedback": n.feedback_score(a["id"]), "note": a["note"]} for a in rows],
+                "runs": n.runs(), "daily_at": n_cfg("daily_at", "06:00"), "weekly_at": n_cfg("weekly_at", "06:30")}
+
+    @sa.post("/api/news/{slug}/status")
+    def _news_status(slug: str, request: Request, body: dict = Body(...)) -> dict:
+        access.require_admin(request)
+        try:
+            get().news.set_status(slug, str(body.get("status")), str(body.get("note") or ""))
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return {"ok": True}
+
+    @sa.post("/api/news/run")
+    def _news_run(request: Request, body: dict = Body(...)) -> dict:
+        """Run the daily writer or the weekly video pick now (in the background)."""
+        access.require_admin(request)
+        kind = str(body.get("kind"))
+        if kind not in ("daily", "weekly"):
+            raise HTTPException(400, "kind")
+        n = get().news
+        fn = (lambda: n.run_daily(force=bool(body.get("force")))) if kind == "daily" else (lambda: n.run_weekly(force=bool(body.get("force"))))
+        threading.Thread(target=fn, daemon=True, name=f"news-{kind}").start()
+        return {"started": kind}
 
     @sa.get("/api/poll-stats")
     def _poll_stats(request: Request) -> dict:

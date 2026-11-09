@@ -66,6 +66,8 @@ class State:
         self.prog.on_wish_topic = lambda cid: self.com.set_card_status(cid, "topic") if (
             self.store.one("SELECT status FROM wish_card WHERE id=?", (cid,)) or {"status": ""})["status"] == "open" else None
         self.worker = Worker(self.com, actor_bible)
+        from .news import Newsroom
+        self.news = Newsroom(self.store, community=self.com, catalog=self.cat)
 
 
 def actor_bible(handle: str) -> dict | None:
@@ -182,6 +184,7 @@ async def _start():
                 if n % 30 == 0:
                     asyncio.get_running_loop().run_in_executor(None, s.worker.run_once)   # AI moderation + actor replies
                 if n % 60 == 0:
+                    asyncio.get_running_loop().run_in_executor(None, s.news.tick)   # 06:00 每日報導、週一 06:30 報導影片
                     await asyncio.to_thread(s.prog.ensure)
                     from . import studio
                     if await asyncio.to_thread(studio.queue_listings, s):
@@ -888,6 +891,110 @@ def topic_page(key: str):
 @app.get("/wishes", response_class=HTMLResponse)
 def wishes_page():
     return _page("wishes.html")
+
+
+@app.get("/news", response_class=HTMLResponse)
+def news_list_page():
+    return _page("news.html")
+
+
+@app.get("/news/{slug}", response_class=HTMLResponse)
+def news_page(slug: str):
+    return _page("news.html")
+
+
+# ------------------------------------------------------------------------------------------------ API: 每日報導
+def _article(slug: str):
+    a = st().news.get(slug)
+    if not a or a["status"] != "live":
+        raise HTTPException(404, "找不到這篇報導，可能已經下架")
+    return a
+
+
+@app.get(API + "/news/today")
+def api_news_today():
+    return st().news.today()
+
+
+@app.get(API + "/news")
+def api_news_archive(day: str | None = None):
+    n = st().news
+    if day:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+            raise HTTPException(400, "day")
+        d, rows = n.day_list(day)
+        return {"days": [{"day": d, "label": rows and n.card(rows[0])["date_label"], "articles": [n.card(a) for a in rows]}] if rows else []}
+    return {"days": n.archive()}
+
+
+@app.get(API + "/news/{slug}")
+def api_news_article(slug: str, request: Request):
+    a = _article(slug)
+    n = st().news
+    viewer, anon, row = actor_id(request)
+    d = n.card(a, full=True, viewer=viewer)
+    _, same = n.day_list(a["day"])
+    d["related"] = [n.card(x) for x in same if x["id"] != a["id"]]
+    d["questions"] = n.questions(a["id"], None if anon else viewer)
+    d["left"] = n.questions_left(viewer) if not anon else None
+    d["me"] = me_public(row)
+    return d
+
+
+@app.post(API + "/news/{slug}/react")
+def api_news_react(slug: str, request: Request, body: dict = Body(...)):
+    a = _article(slug)
+    viewer, anon, _ = actor_id(request)
+    try:
+        return st().news.react(a["id"], viewer, str(body.get("kind")), bool(body.get("on", True)), anon=anon)
+    except ValueError as e:
+        raise _err(e) from e
+
+
+@app.post(API + "/news/{slug}/read")
+def api_news_read(slug: str, request: Request, body: dict = Body(...)):
+    a = _article(slug)
+    viewer, _, _ = actor_id(request)
+    st().news.read(a["id"], viewer, bool(body.get("done")))
+    return {"ok": True}
+
+
+@app.post(API + "/news/{slug}/quiz")
+def api_news_quiz(slug: str, request: Request, body: dict = Body(...)):
+    a = _article(slug)
+    viewer, _, _ = actor_id(request)
+    st().news.answer_quiz(a["id"], viewer, int(body.get("choice") or 0))
+    return st().news.card(a, full=True, viewer=viewer)["quiz"]
+
+
+@app.post(API + "/news/{slug}/questions")
+def api_news_ask(slug: str, request: Request, body: dict = Body(...)):
+    a = _article(slug)
+    v = _writer(request)
+    para = body.get("para")
+    try:
+        out = st().news.ask(v, a["id"], str(body.get("text") or ""), int(para) if isinstance(para, int) else None, body.get("quote"))
+    except (PermissionError, OverflowError, ValueError) as e:
+        raise _err(e) from e
+    return out | {"questions": st().news.questions(a["id"], int(v["id"]))}
+
+
+@app.post(API + "/news/questions/{qid}/support")
+def api_news_support(qid: int, request: Request):
+    v = _writer(request)
+    try:
+        return {"supporters": st().news.support(qid, int(v["id"]), True)}
+    except LookupError as e:
+        raise _err(e) from e
+
+
+@app.delete(API + "/news/questions/{qid}/support")
+def api_news_unsupport(qid: int, request: Request):
+    v = _writer(request)
+    try:
+        return {"supporters": st().news.support(qid, int(v["id"]), False)}
+    except LookupError as e:
+        raise _err(e) from e
 
 
 # ------------------------------------------------------------------------------------------------ the studio (/studio)

@@ -38,6 +38,7 @@ Midea 是 midea.cafeca.io 的 AI 影音平台：平台上的影片、演員、�
 - 推薦理由用使用者看得懂的話：「因為你看完了《Wander wide. Wear light.》」「依你的觀看」，不寫「演算法分數」。
 - **觀眾影響的固定寫法**（`InfluenceTag`）：「觀眾投票選出」「觀眾想再看」「觀眾最有反應的片段」「觀眾決定 · 投票中」，第二期加「依觀眾許願」「觀眾許願製作」。細節寫在旁邊：「觀眾投票選出 · 第 1 名 412 票（共 1,046 票）」「上週 23 位觀眾中有 17 位想再看」。
 - **AI 生成的回答**（演員的文字或影片回答）一律標「AI 生成 · 虛擬演員」，和觀眾寫的字清楚分開。
+- **每日報導**一律標「AI 撰寫 · 附來源」並列出來源連結；數字只用來源裡有的，圖上的每個數字都要能在來源找到。標題不加驚嘆號、不用「震驚」「必看」。續作開頭寫「依 N 位讀者的「想看續作」」；每週影片寫「編輯選」或「觀眾選」。
 - 檢舉、審核與處置的寫法：「已檢舉，這則內容已先隱藏，等待管理者處理」「這則訊息沒有顯示：疑似個資內容」「禁言到 11/9 18:00（仍然可以觀看）」——說出原因與期限，不用「違規」「封鎖」這類字眼指責人。
 - 互動的說明寫出影響：「不用登入也可以按 · 你的反應會影響你看到的主題」「「想」過半就重播或做續集」。
 
@@ -64,7 +65,7 @@ Midea 是 midea.cafeca.io 的 AI 影音平台：平台上的影片、演員、�
 - 區塊之間 `space-7`（40px）；磚塊之間 `space-4`（14px）；磚塊內距 `space-5`（20px）。
 - Bento 是 4 欄格線，列高依區塊：首屏 `row-hero`（230px）、最多人看 `row-rank`（170px）、主題 `row-topic`（180px）。主角磚塊佔 2×2，直式短片佔 1×2，其餘 1×1。
 - 平板（< 1024px）改 2 欄，主角仍佔 2×2；手機（< 640px）改 1 欄，主角變 1×1 但列高加倍。
-- 首頁順序固定：導覽 → 首屏 Bento（直播、下一個時段、直式短片、本週主題）→ 本週每晚的主打時段 → 最多人看 → 依興趣的主題（每個主題一塊 Bento）→ 平台演員與登入 → 頁尾。完整規則見「版面」。
+- 首頁順序固定：導覽 → 首屏 Bento（直播、下一個時段、直式短片、本週主題）→ 本週每晚的主打時段 → 今日報導 → 最多人看 → 依興趣的主題（每個主題一塊 Bento）→ 平台演員與登入 → 頁尾。完整規則見「版面」。
 
 ## 圓角、邊框與陰影
 
@@ -93,7 +94,7 @@ Midea 是 midea.cafeca.io 的 AI 影音平台：平台上的影片、演員、�
 
 ## 圖示
 
-- 線條圖示，24×24 格線、2px 線寬、圓角端點，顏色跟著文字（`currentColor`）。目前有：search、play、pause、key（CAFECA 登入）、sound-off、sound、arrow-right、chevron-right、expand、bookmark（收藏）、share、eye（正在看）、people（觀眾影響）、check、x、home、calendar、grid、user、back、list、cc（字幕）、rotate（橫向）、flag、send、chat、star，以及即時反應的 heart（喜歡）、sparkle（美）、smile（好笑）、tear（感動）、plus（想看更多）。用 `Icon` 元件，不要用表情符號。
+- 線條圖示，24×24 格線、2px 線寬、圓角端點，顏色跟著文字（`currentColor`）。目前有：search、play、pause、key（CAFECA 登入）、sound-off、sound、arrow-right、chevron-right、expand、bookmark（收藏）、share、eye（正在看）、people（觀眾影響）、check、x、home、calendar、grid、user、back、list、cc（字幕）、rotate（橫向）、flag、send、chat、star、pen（續作）、film（影片）、news、repo、paper、quote（引用）、link，以及即時反應的 heart（喜歡）、sparkle（美）、smile（好笑）、tear（感動）、plus（想看更多）。用 `Icon` 元件，不要用表情符號。
 - 播放鍵是實心三角形，其他都是線條。
 
 ## 標誌

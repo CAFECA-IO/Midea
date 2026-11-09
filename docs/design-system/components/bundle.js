@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Midea","components":[{"name":"Logo"},{"name":"Icon"},{"name":"Button"},{"name":"SignInButton"},{"name":"SearchField"},{"name":"SegmentedTabs"},{"name":"SiteHeader"},{"name":"SiteFooter"},{"name":"Badge"},{"name":"Tag"},{"name":"ProgressBar"},{"name":"SectionHeader"},{"name":"BentoGrid"},{"name":"VideoTile"},{"name":"ThemeTile"},{"name":"RankTile"},{"name":"RankRow"},{"name":"DaySlot"},{"name":"ActorCard"},{"name":"InfluenceTag"},{"name":"ViewerCount"},{"name":"ReactionBar"},{"name":"LiveReactions"},{"name":"PollCard"},{"name":"LivePlayer"},{"name":"VideoPlayer"},{"name":"VideoMeta"},{"name":"AIDisclosure"},{"name":"SignInDialog"},{"name":"AccountMenu"},{"name":"Skeleton"},{"name":"EmptyState"},{"name":"TopicBento"},{"name":"BottomNav"},{"name":"ChatPanel"},{"name":"WishCard"},{"name":"WishComposer"},{"name":"AskActor"},{"name":"AnswerTile"},{"name":"TopicHeader"},{"name":"ScheduleDay"},{"name":"ScheduleWeek"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Midea","components":[{"name":"Logo"},{"name":"Icon"},{"name":"Button"},{"name":"SignInButton"},{"name":"SearchField"},{"name":"SegmentedTabs"},{"name":"SiteHeader"},{"name":"SiteFooter"},{"name":"Badge"},{"name":"Tag"},{"name":"ProgressBar"},{"name":"SectionHeader"},{"name":"BentoGrid"},{"name":"VideoTile"},{"name":"ThemeTile"},{"name":"RankTile"},{"name":"RankRow"},{"name":"DaySlot"},{"name":"ActorCard"},{"name":"InfluenceTag"},{"name":"ViewerCount"},{"name":"ReactionBar"},{"name":"LiveReactions"},{"name":"PollCard"},{"name":"LivePlayer"},{"name":"VideoPlayer"},{"name":"VideoMeta"},{"name":"AIDisclosure"},{"name":"SignInDialog"},{"name":"AccountMenu"},{"name":"Skeleton"},{"name":"EmptyState"},{"name":"TopicBento"},{"name":"BottomNav"},{"name":"ChatPanel"},{"name":"WishCard"},{"name":"WishComposer"},{"name":"AskActor"},{"name":"AnswerTile"},{"name":"TopicHeader"},{"name":"ScheduleDay"},{"name":"ScheduleWeek"},{"name":"KindChip"},{"name":"ArticleFigure"},{"name":"ArticleTile"},{"name":"ArticleReactions"},{"name":"FollowupMeter"},{"name":"QuizCard"},{"name":"SourceList"}]} */
 (function () {
   var React = window.React;
   var h = React.createElement;
@@ -598,6 +598,106 @@
     }));
   }
 
+  /* ---------------------------------------------------------------- v4: 每日報導 (daily reports) */
+  Object.assign(PATHS, {
+    pen: [['path', { d: 'M4 20h4L19 9l-4-4L4 16z' }], ['path', { d: 'm13 7 4 4' }]],
+    film: [['rect', { x: 3, y: 5, width: 18, height: 14, rx: 2 }], ['path', { d: 'M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4' }]],
+    news: [['rect', { x: 3, y: 4, width: 18, height: 16, rx: 2 }], ['path', { d: 'M7 8h10M7 12h10M7 16h6' }]],
+    repo: [['path', { d: 'M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z' }], ['path', { d: 'M5 17a3 3 0 0 1 3-3h11' }]],
+    paper: [['path', { d: 'M6 3h9l4 4v14H6z' }], ['path', { d: 'M14 3v5h5M9 13h7M9 17h5' }]],
+    quote: [['path', { d: 'M7 7h4v4H8v3H5v-4zM15 7h4v4h-3v3h-3v-4z' }]],
+    link: [['path', { d: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1' }]]
+  });
+  var KIND_ICON = { news: 'news', repo: 'repo', paper: 'paper' };
+
+  /* KindChip — 新聞 / GitHub / 論文 */
+  function KindChip(p) {
+    return h('span', { className: 'md-kind' }, h(Icon, { name: KIND_ICON[p.kind] || 'news', size: 14 }), p.children || p.label);
+  }
+
+  /* ArticleFigure — the article's SVG (server-rendered `wide` + `narrow`); marks with data-i are clickable */
+  function ArticleFigure(p) {
+    var ref = React.useRef(null);
+    var _s = React.useState(p.selected == null ? null : p.selected), sel = _s[0], setSel = _s[1];
+    React.useEffect(function () {
+      var el = ref.current; if (!el) return;
+      function pick(e) {
+        var m = e.target.closest && e.target.closest('.nf-mark'); if (!m) return;
+        var i = Number(m.getAttribute('data-i')); setSel(i); if (p.onSelect) p.onSelect(i);
+      }
+      function key(e) { if (e.key === 'Enter' || e.key === ' ') { pick(e); e.preventDefault(); } }
+      el.addEventListener('click', pick); el.addEventListener('keydown', key);
+      return function () { el.removeEventListener('click', pick); el.removeEventListener('keydown', key); };
+    }, [p.onSelect]);
+    React.useEffect(function () { if (p.selected != null) setSel(p.selected); }, [p.selected]);
+    React.useEffect(function () {
+      var el = ref.current; if (!el || sel == null) return;
+      Array.prototype.forEach.call(el.querySelectorAll('.nf-mark'), function (m) { m.classList.toggle('is-on', Number(m.getAttribute('data-i')) === sel); });
+    }, [sel, p.wide, p.narrow]);
+    if (!p.wide && !p.narrow) return null;
+    return h('figure', { className: cx('md-afig', p.compact && 'is-compact'), ref: ref },
+      p.wide ? h('div', { className: 'md-afig-wide', dangerouslySetInnerHTML: { __html: p.wide } }) : null,
+      p.narrow ? h('div', { className: 'md-afig-narrow', dangerouslySetInnerHTML: { __html: p.narrow } }) : null,
+      p.caption ? h('figcaption', { className: 'md-meta' }, typeof p.caption === 'function' ? p.caption(sel) : p.caption) : null);
+  }
+
+  /* ArticleTile — a report in the 今日報導 Bento: kind, source, mini figure, title, follow-up counts */
+  function ArticleTile(p) {
+    var lead = p.cols > 1;
+    return h('a', { href: p.href || '#', className: cx('md-tile', 'md-atile', lead && 'is-lead', span(p.cols, p.rows)) },
+      h('span', { className: 'md-atile-top' }, h(KindChip, { kind: p.kind }, p.kindLabel), p.source ? h('span', { className: 'md-meta' }, p.source) : null,
+        p.badge || null),
+      p.figure ? h('span', { className: 'md-atile-fig', 'aria-hidden': 'true', dangerouslySetInnerHTML: { __html: p.figure } }) : h('span', { className: 'md-atile-fig' }),
+      h('span', { className: 'md-atile-title' }, p.title),
+      lead && p.dek ? h('span', { className: 'md-atile-dek' }, p.dek) : null,
+      p.meta ? h('span', { className: 'md-atile-meta' }, p.meta) : null);
+  }
+
+  /* ArticleReactions — four toggles with counts (有幫助・想看續作・做成影片・有疑問); several can be on */
+  function ArticleReactions(p) {
+    var on = p.value || [];
+    return h('div', { className: cx('md-areact', p.bar && 'is-bar'), role: 'group', 'aria-label': p.label || '你覺得這篇？' },
+      (p.options || []).map(function (o) {
+        var active = on.indexOf(o.value) >= 0, n = (p.counts || {})[o.value];
+        return h('button', { key: o.value, type: 'button', className: cx('md-chip', 'md-chip-sm', active && 'is-on'), 'aria-pressed': active ? 'true' : 'false',
+          onClick: function () { if (p.onToggle) p.onToggle(o.value, !active); } },
+          o.icon ? h(Icon, { name: o.icon, size: 15 }) : null, o.label, n ? h('span', { className: 'md-areact-n' }, n) : null);
+      }));
+  }
+
+  /* FollowupMeter — progress toward a follow-up (續作 n / 20) or a weekly video pick */
+  function FollowupMeter(p) {
+    var max = p.max || 0, v = p.value || 0;
+    return h('div', { className: 'md-fmeter' },
+      h('span', { className: 'md-fmeter-head' }, h('b', null, p.label), h('span', { className: cx(max && v >= max && 'is-done') }, max ? v + ' / ' + max : p.valueLabel || v)),
+      max ? h(ProgressBar, { value: v / max, label: p.label }) : null,
+      p.note ? h('span', { className: 'md-meta' }, p.note) : null);
+  }
+
+  /* QuizCard — one question at the end of an article; after answering shows the right one and the share who got it */
+  function QuizCard(p) {
+    var answered = p.mine != null;
+    return h('div', { className: 'md-quiz' },
+      h('span', { className: 'md-quiz-eyebrow' }, p.eyebrow || '小測驗'),
+      h('b', { className: 'md-quiz-q' }, p.question),
+      h('div', { className: 'md-quiz-opts', role: 'group', 'aria-label': p.question }, (p.options || []).map(function (o, i) {
+        var right = answered && i === p.answer, wrong = answered && i === p.mine && i !== p.answer;
+        return h('button', { key: i, type: 'button', disabled: answered, className: cx('md-chip', 'md-chip-sm', right && 'is-on', wrong && 'is-wrong'),
+          onClick: function () { if (p.onAnswer) p.onAnswer(i); } }, right ? h(Icon, { name: 'check', size: 14 }) : null, o);
+      })),
+      answered ? h('span', { className: 'md-meta' }, (p.mine === p.answer ? '答對' : '答案是「' + p.options[p.answer] + '」') +
+        (p.right != null ? ' · ' + p.right + '% 的讀者答對' : '')) : null);
+  }
+
+  /* SourceList — 「AI 撰寫 · 附來源」 and the source links */
+  function SourceList(p) {
+    return h('div', { className: 'md-sources' },
+      h('span', { className: 'md-tag md-tag-influence' }, h(Icon, { name: 'sparkle', size: 13 }), p.label || 'AI 撰寫 · 附來源'),
+      (p.sources || []).map(function (s, i) {
+        return h('a', { key: i, href: s.url, target: '_blank', rel: 'noopener noreferrer', className: 'md-sources-a' }, h(Icon, { name: 'link', size: 13 }), s.source || s.title);
+      }));
+  }
+
   var api = { Logo: Logo, Icon: Icon, Button: Button, SignInButton: SignInButton, SearchField: SearchField, SegmentedTabs: SegmentedTabs,
     SiteHeader: SiteHeader, SiteFooter: SiteFooter, Badge: Badge, Tag: Tag, ProgressBar: ProgressBar, SectionHeader: SectionHeader,
     BentoGrid: BentoGrid, VideoTile: VideoTile, ThemeTile: ThemeTile, RankTile: RankTile, RankRow: RankRow, DaySlot: DaySlot, ActorCard: ActorCard,
@@ -605,6 +705,8 @@
     LivePlayer: LivePlayer, VideoPlayer: VideoPlayer, VideoMeta: VideoMeta, AIDisclosure: AIDisclosure, SignInDialog: SignInDialog,
     AccountMenu: AccountMenu, Skeleton: Skeleton, EmptyState: EmptyState, TopicBento: TopicBento, BottomNav: BottomNav,
     ChatPanel: ChatPanel, WishCard: WishCard, WishComposer: WishComposer, AskActor: AskActor, AnswerTile: AnswerTile,
-    TopicHeader: TopicHeader, ScheduleDay: ScheduleDay, ScheduleWeek: ScheduleWeek };
+    TopicHeader: TopicHeader, ScheduleDay: ScheduleDay, ScheduleWeek: ScheduleWeek,
+    KindChip: KindChip, ArticleFigure: ArticleFigure, ArticleTile: ArticleTile, ArticleReactions: ArticleReactions,
+    FollowupMeter: FollowupMeter, QuizCard: QuizCard, SourceList: SourceList };
   window.Midea = Object.assign(window.Midea || {}, api);
 })();

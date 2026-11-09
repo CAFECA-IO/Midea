@@ -88,7 +88,7 @@ pre.json{white-space:pre-wrap;font:12px/1.45 ui-monospace,Menlo,monospace;backgr
 <aside>
   <h1>Midea Studio <small id="mode"></small></h1>
   <div class="me" id="me"></div>
-  <div class="nav"><button id="nav-films" class="on" onclick="goFilms()">影片製作</button><button id="nav-actors" onclick="goActors()">演員陣容 <span id="actor-count" style="color:var(--muted)"></span></button><button id="nav-ads" onclick="goAds()">廣告製作</button><button id="nav-fb" onclick="goFeedback()">觀眾回饋</button><button id="nav-rv" onclick="goReview()" hidden>審核 <span id="rv-count" style="color:var(--muted)"></span></button></div>
+  <div class="nav"><button id="nav-films" class="on" onclick="goFilms()">影片製作</button><button id="nav-actors" onclick="goActors()">演員陣容 <span id="actor-count" style="color:var(--muted)"></span></button><button id="nav-ads" onclick="goAds()">廣告製作</button><button id="nav-fb" onclick="goFeedback()">觀眾回饋</button><button id="nav-rv" onclick="goReview()" hidden>審核 <span id="rv-count" style="color:var(--muted)"></span></button><button id="nav-news" onclick="goNews()" hidden>報導</button></div>
   <div class="card">
     <h3>新影片</h3>
     <label>一句話描述</label>
@@ -144,18 +144,19 @@ async function init() {
   const me = META.me || {};
   $("#me").innerHTML = META.auth === "cafeca" ? `<b>${esc(me.name)}</b>${me.admin ? ` <span class="badge b-approved">管理者</span>` : ""}
     <a href="/">公開網站</a> · <a href="#" onclick="logout();return false">登出</a>` : `<b>本機操作者</b>`;
-  if (me.admin) { $("#nav-rv").hidden = false; refreshReviewCount(); } else if (META.auth === "cafeca") $("#f-auto-wrap").hidden = true;
+  if (me.admin) { $("#nav-rv").hidden = false; $("#nav-news").hidden = !BASE; refreshReviewCount(); } else if (META.auth === "cafeca") $("#f-auto-wrap").hidden = true;
   $("#toolcount").textContent = `${Object.keys(META.pipelines).length} 條製作管線 · ${META.tools} 種工具`;
   for (const [k, p] of Object.entries(META.pipelines)) $("#f-pipe").insertAdjacentHTML("beforeend", `<option value="${k}">${esc(p.title)}</option>`);
   $("#f-go").onclick = create;
   initMention();
   refreshList(); refreshGpu(); refreshActors(); setInterval(refreshGpu, 5000); setInterval(refreshList, 8000);
   const h = location.hash.slice(1);
-  if (h === "feedback") goFeedback(); else if (h === "review") goReview(); else if (h === "ads") goAds(); else if (h === "actors") goActors(); else if (h.startsWith("actor/")) openActor(h.slice(6)); else if (h) open(h);
+  if (h === "feedback") goFeedback(); else if (h === "review") goReview(); else if (h === "news") goNews(); else if (h === "ads") goAds(); else if (h === "actors") goActors(); else if (h.startsWith("actor/")) openActor(h.slice(6)); else if (h) open(h);
   window.addEventListener("hashchange", () => {
     const k = location.hash.slice(1);
     if (k === "feedback") { if (VIEW !== "feedback") goFeedback(); }
     else if (k === "review") { if (VIEW !== "review") goReview(); }
+    else if (k === "news") { if (VIEW !== "news") goNews(); }
     else if (k === "ads") { if (VIEW !== "ads") goAds(); }
     else if (k === "actors" && VIEW !== "actors") goActors();
     else if (k.startsWith("actor/") && ACTOR?.id !== k.slice(6)) openActor(k.slice(6));
@@ -353,7 +354,7 @@ function logTab() {
     <h2>GPU 用量</h2><div class="log">${(DATA.cost.lines || []).slice(-80).reverse().map(l => `${l.service} ${l.gpu_s}s → ${l.cost}`).join("<br>") || "—"}</div>`;
 }
 // ------------------------------------------------------------------ virtual actors
-function setView(v) { VIEW = v; document.body.dataset.view = v; $("#nav-films").classList.toggle("on", v === "films"); $("#nav-actors").classList.toggle("on", v === "actors" || v === "actor"); $("#nav-ads").classList.toggle("on", v === "ads"); $("#nav-fb").classList.toggle("on", v === "feedback"); $("#nav-rv").classList.toggle("on", v === "review"); }
+function setView(v) { VIEW = v; document.body.dataset.view = v; $("#nav-films").classList.toggle("on", v === "films"); $("#nav-actors").classList.toggle("on", v === "actors" || v === "actor"); $("#nav-ads").classList.toggle("on", v === "ads"); $("#nav-fb").classList.toggle("on", v === "feedback"); $("#nav-rv").classList.toggle("on", v === "review"); $("#nav-news").classList.toggle("on", v === "news"); }
 function goFilms() { setView("films"); clearInterval(ACTOR_POLL); if (CUR) open(CUR); else { location.hash = ""; $("#main").innerHTML = `<div class="empty">選擇左側專案，或輸入一句話開始製作。</div>`; } }
 async function refreshActors() {
   try { ACTORS = await api("/api/actors"); $("#actor-count").textContent = ACTORS.length || ""; renderCastChips(); } catch (e) {}
@@ -424,6 +425,33 @@ async function decide(id, decision) {
   if (note === null) return;
   try { await api(`/api/review/${id}`, { method: "POST", body: JSON.stringify({ decision, note }) }); } catch (e) { alert(e.message); }
   goReview();
+}
+// ---- 每日報導（管理者）：排程紀錄、立即執行、下架
+const TPL_ZH = { brief: "快訊", story: "數據故事", ranking: "排行榜", timeline: "時間軸", versus: "對照", howto: "圖解", paper: "論文速讀" };
+async function goNews() {
+  setView("news"); clearInterval(ACTOR_POLL); if (ES) { ES.close(); ES = null; } location.hash = "news";
+  let d; try { d = await api("/api/news"); } catch (e) { $("#main").innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const when = t => t ? new Date(t * 1000).toLocaleString("zh-TW", { hour12: false, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  const runRes = r => r.kind === "weekly" && r.result && r.result.picks ? r.result.picks.map(p => `${p.pick === "editor" ? "編輯選" : "觀眾選"}：${esc(p.title)}（<a href="#${esc(p.project)}">${esc(p.project)}</a>）`).join("<br>")
+    : r.result && r.result.articles ? (Array.isArray(r.result.articles) ? r.result.articles.length + " 篇" : esc(r.result.note || "")) : esc(r.error || (r.result && r.result.note) || "");
+  $("#main").innerHTML = `<h1>每日報導 <small>每天 ${esc(d.daily_at)} 寫 5 篇、直接上架；每週一 ${esc(d.weekly_at)} 用上週的報導建立兩部影片（編輯選、觀眾選）</small></h1>
+    <div class="row" style="justify-content:flex-start;gap:8px;margin-bottom:12px"><button class="primary" style="flex:0 0 auto" onclick="runNews('daily')">立即寫今天的報導</button>
+    <button style="flex:0 0 auto" onclick="runNews('daily', true)">重寫今天（補到 5 篇）</button><button style="flex:0 0 auto" onclick="runNews('weekly')">立即建立本週兩部影片</button></div>
+    <h2>排程紀錄</h2><div class="rv">${d.runs.map(r => `<div class="card"><div><span class="badge b-${r.status === "done" ? "done" : r.status === "failed" ? "failed" : "running"}">${r.kind === "daily" ? "每日" : "每週"} ${esc(r.key)}</span>
+      ${r.status === "done" ? "完成" : r.status === "failed" ? "失敗（第 " + r.tries + " 次）" : "執行中"} · ${when(r.started)}<br><small style="color:var(--muted)">${runRes(r)}</small></div></div>`).join("") || `<div class="empty">還沒有執行過。</div>`}</div>
+    <h2>最近的報導</h2><div class="rv">${d.articles.map(a => `<div class="card"><div><span class="badge">${esc(a.date_label)}</span> <span class="badge">${TPL_ZH[a.template] || a.template}</span> ${a.status === "hidden" ? '<span class="badge b-failed">已下架</span>' : ""}
+      <a href="/news/${esc(a.slug)}" target="_blank">${esc(a.title)}</a><br><small style="color:var(--muted)">反饋 ${a.feedback.score} 分（做成影片 ${a.feedback.video} · 想看續作 ${a.feedback.sequel} · 有幫助 ${a.feedback.helpful} · 問題 +1 ${a.feedback.support} · 讀完 ${a.feedback.done}）${a.video ? " · 本週影片：" + a.video.label : ""}${a.note ? " · " + esc(a.note) : ""}</small></div>
+      <div class="acts">${a.status === "live" ? `<button class="danger" onclick="newsStatus('${esc(a.slug)}','hidden')">下架</button>` : `<button onclick="newsStatus('${esc(a.slug)}','live')">恢復上架</button>`}</div></div>`).join("") || `<div class="empty">還沒有報導。</div>`}</div>`;
+}
+async function runNews(kind, force) {
+  try { await api("/api/news/run", { method: "POST", body: JSON.stringify({ kind, force: !!force }) }); } catch (e) { alert(e.message); return; }
+  setTimeout(goNews, 1500);
+}
+async function newsStatus(slug, status) {
+  const note = status === "hidden" ? prompt("下架原因（只有管理者看得到）", "") : "";
+  if (note === null) return;
+  try { await api(`/api/news/${slug}/status`, { method: "POST", body: JSON.stringify({ status, note }) }); } catch (e) { alert(e.message); }
+  goNews();
 }
 async function logout() { await fetch("/api/public/v1/auth/logout", { method: "POST", headers: HDR }); location.href = "/"; }
 

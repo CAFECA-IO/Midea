@@ -217,6 +217,25 @@ site:
   wish_threshold: 30               # 許願卡 +1 達幾人送管理者核准製作
   wish_merge_similarity: 0.6       # 許願文字相似度達多少就合併成同一張卡
   admins: []                       # 管理者的 CAFECA 帳戶地址；也可以用 `midea site admin <代號>` 指定
+  news:                            # 每日報導（/news）：AI 讀新聞、GitHub、論文，每天寫 5 篇，每篇一張 SVG 圖
+    enabled: true
+    daily_at: "06:00"              # 台北時間；寫好直接上架，管理者可在 /studio「報導」下架
+    per_day: 5
+    sequel_threshold: 20           # 「想看續作」達幾人，隔天優先寫續作
+    weekly_weekday: 0              # 0 = 週一：用上週的報導做兩部影片（編輯選、觀眾選）
+    weekly_at: "06:30"
+    weekly_autostart: true         # 建立專案後直接開始製作（關卡仍需管理者通過）
+    reporter: yen_lin              # 播報的虛擬記者
+    video_pipeline: ""             # 空白 = 自動判斷
+    arxiv_categories: [cs.CV, cs.CL, cs.AI, cs.LG]
+    feeds:                         # RSS / Atom
+      - https://hnrss.org/frontpage?points=200
+      - https://techcrunch.com/category/artificial-intelligence/feed/
+      - https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+      - https://feeds.arstechnica.com/arstechnica/technology-lab
+      - https://www.technologyreview.com/feed/
+      - https://technews.tw/feed/
+      - https://www.ithome.com.tw/rss
   studio:                          # /studio 製作後台（每個 CAFECA 身分一個）
     max_actors: 3                  # 每人最多幾位專屬演員
     max_active_projects: 1         # 每人同時製作中的影片數（GPU 共用）

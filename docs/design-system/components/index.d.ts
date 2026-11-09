@@ -2,7 +2,8 @@ import type * as React from 'react';
 
 export type IconName = 'search' | 'play' | 'key' | 'sound-off' | 'arrow-right' | 'chevron-right'
   | 'heart' | 'sparkle' | 'smile' | 'tear' | 'plus' | 'x' | 'bookmark' | 'share' | 'eye' | 'people' | 'sound' | 'expand'
-  | 'home' | 'calendar' | 'grid' | 'user' | 'check' | 'flag' | 'send' | 'chat' | 'star' | 'back' | 'pause' | 'list' | 'cc' | 'rotate';
+  | 'home' | 'calendar' | 'grid' | 'user' | 'check' | 'flag' | 'send' | 'chat' | 'star' | 'back' | 'pause' | 'list' | 'cc' | 'rotate'
+  | 'pen' | 'film' | 'news' | 'repo' | 'paper' | 'quote' | 'link';
 export type Move = 'new' | 'up' | 'down' | 'same';
 
 export interface LogoProps { size?: number; mark?: boolean; href?: string }
@@ -161,6 +162,27 @@ export declare function ScheduleDay(props: ScheduleDayProps): React.ReactElement
 export interface ScheduleWeekProps { days: { label: string; today?: boolean; slots: ScheduleSlot[] }[]; nowLabel?: string }
 export declare function ScheduleWeek(props: ScheduleWeekProps): React.ReactElement;
 
+export type ArticleKind = 'news' | 'repo' | 'paper';
+export type ArticleReaction = 'helpful' | 'sequel' | 'video' | 'question';
+export interface KindChipProps { kind: ArticleKind; label?: string; children?: React.ReactNode }
+export declare function KindChip(props: KindChipProps): React.ReactElement;
+export interface ArticleFigureProps { wide?: string; narrow?: string; caption?: React.ReactNode | ((selected: number | null) => React.ReactNode);
+  selected?: number; onSelect?: (index: number) => void; compact?: boolean }
+export declare function ArticleFigure(props: ArticleFigureProps): React.ReactElement | null;
+export interface ArticleTileProps { href: string; kind: ArticleKind; kindLabel: string; source?: string; figure?: string; title: string; dek?: string;
+  meta?: React.ReactNode; badge?: React.ReactNode; cols?: number; rows?: number }
+export declare function ArticleTile(props: ArticleTileProps): React.ReactElement;
+export interface ArticleReactionsProps { options: { value: ArticleReaction; label: string; icon?: IconName }[]; value?: ArticleReaction[];
+  counts?: Partial<Record<ArticleReaction, number>>; onToggle?: (kind: ArticleReaction, on: boolean) => void; bar?: boolean; label?: string }
+export declare function ArticleReactions(props: ArticleReactionsProps): React.ReactElement;
+export interface FollowupMeterProps { label: string; value?: number; max?: number; valueLabel?: string; note?: React.ReactNode }
+export declare function FollowupMeter(props: FollowupMeterProps): React.ReactElement;
+export interface QuizCardProps { question: string; options: string[]; mine?: number | null; answer?: number | null; right?: number | null;
+  eyebrow?: string; onAnswer?: (index: number) => void }
+export declare function QuizCard(props: QuizCardProps): React.ReactElement;
+export interface SourceListProps { sources: { title?: string; url: string; source?: string }[]; label?: string }
+export declare function SourceList(props: SourceListProps): React.ReactElement;
+
 declare global { interface Window { Midea: { Logo: typeof Logo; Icon: typeof Icon; Button: typeof Button; SignInButton: typeof SignInButton;
   SearchField: typeof SearchField; SegmentedTabs: typeof SegmentedTabs; SiteHeader: typeof SiteHeader; SiteFooter: typeof SiteFooter;
   Badge: typeof Badge; Tag: typeof Tag; ProgressBar: typeof ProgressBar; SectionHeader: typeof SectionHeader; BentoGrid: typeof BentoGrid;
@@ -170,4 +192,6 @@ declare global { interface Window { Midea: { Logo: typeof Logo; Icon: typeof Ico
   VideoMeta: typeof VideoMeta; AIDisclosure: typeof AIDisclosure; SignInDialog: typeof SignInDialog; AccountMenu: typeof AccountMenu;
   Skeleton: typeof Skeleton; EmptyState: typeof EmptyState; TopicBento: typeof TopicBento; BottomNav: typeof BottomNav;
   ChatPanel: typeof ChatPanel; WishCard: typeof WishCard; WishComposer: typeof WishComposer; AskActor: typeof AskActor; AnswerTile: typeof AnswerTile;
-  TopicHeader: typeof TopicHeader; ScheduleDay: typeof ScheduleDay; ScheduleWeek: typeof ScheduleWeek } } }
+  TopicHeader: typeof TopicHeader; ScheduleDay: typeof ScheduleDay; ScheduleWeek: typeof ScheduleWeek;
+  KindChip: typeof KindChip; ArticleFigure: typeof ArticleFigure; ArticleTile: typeof ArticleTile; ArticleReactions: typeof ArticleReactions;
+  FollowupMeter: typeof FollowupMeter; QuizCard: typeof QuizCard; SourceList: typeof SourceList } } }
