@@ -65,7 +65,9 @@ def bars(spec: dict, w: int = WIDE) -> str:
     hi = spec.get("highlight", 0)
     neg = any(_num(r["value"]) < 0 for r in rows)
     mx = max(abs(_num(r["value"])) for r in rows) or 1
-    label_w = 0 if narrow else 150
+    def _w(t: str) -> float:
+        return sum(1.0 if ord(ch) > 0x2E80 else 0.58 for ch in str(t)) * fs
+    label_w = 0 if narrow else int(min(260, max(110, max(_w(r.get("label", "")) for r in rows) + 18)))
     top = 26
     rh = 46 if narrow else 40
     h = top + rh * len(rows) + 6
@@ -79,8 +81,8 @@ def bars(spec: dict, w: int = WIDE) -> str:
             body += _text(0, y + 13, r.get("label", ""), fs, "var(--ink)" if on else "var(--ink-muted)", weight=700 if on else 400)
             by, bh, x0, avail = y + 19, 16, 0, w - 78
         else:
-            body += _text(label_w - 10, y + rh / 2 + 5, r.get("label", ""), fs, "var(--ink)" if on else "var(--ink-muted)", "end",
-                          700 if on else 400)
+            body += _text(label_w - 10, y + rh / 2 + 5, _short(r.get("label", ""), (label_w - 14) / fs), fs,
+                          "var(--ink)" if on else "var(--ink-muted)", "end", 700 if on else 400)
             by, bh, x0, avail = y + 9, rh - 18, label_w, w - label_w - 84
         bw = max(3, avail * v / mx)
         disp = r.get("display") or _fmt(r["value"], spec.get("unit"))
@@ -129,7 +131,7 @@ def flow(spec: dict, w: int = WIDE) -> str:
                      f'<rect x="20" y="{y}" width="{bw}" height="{bh}" rx="10" fill="{"var(--amber-soft)" if on else "var(--surface-raised)"}" '
                      f'stroke="{"var(--amber)" if on else "var(--line)"}"/>'
                      f'{_text(w / 2, y + 25, n.get("label", ""), 15, "var(--amber-text)" if on else "var(--ink)", "middle", 800)}'
-                     f'{_text(w / 2, y + 44, n.get("sub", ""), 12, "var(--ink-subtle)", "middle")}</g>')
+                     f'{_text(w / 2, y + 44, _short(n.get("sub", ""), (bw - 16) / 12), 12, "var(--ink-subtle)", "middle")}</g>')
             if i < len(nodes) - 1:
                 body += (f'<path d="M{w / 2} {y + bh + 3}V{y + bh + gap - 5}" stroke="var(--amber)" stroke-width="2"/>'
                          f'<path d="M{w / 2 - 5} {y + bh + gap - 10}l5 6 5-6" stroke="var(--amber)" stroke-width="2" fill="none"/>')
@@ -152,7 +154,7 @@ def flow(spec: dict, w: int = WIDE) -> str:
                  f'stroke="{"var(--amber)" if on else "var(--line)"}"/>')
         for j, ln in enumerate(lines):
             body += _text(x + bw / 2, y + 30 + j * 18 - (len(lines) - 1) * 6, ln, 15, "var(--amber-text)" if on else "var(--ink)", "middle", 800)
-        body += _text(x + bw / 2, y + bh - 12, nd.get("sub", ""), 12, "var(--ink-subtle)", "middle") + "</g>"
+        body += _text(x + bw / 2, y + bh - 12, _short(nd.get("sub", ""), (bw - 12) / 12), 12, "var(--ink-subtle)", "middle") + "</g>"
         if i < n - 1:
             ax = x + bw
             body += (f'<path d="M{ax + 4:.1f} {y + bh / 2}H{ax + gap - 6:.1f}" stroke="var(--amber)" stroke-width="2"/>'
@@ -235,8 +237,8 @@ def compare(spec: dict, w: int = WIDE) -> str:
             bh = 90 if not narrow else 70
             hh = max(4, bh * abs(v) / mx)
             body += (f'<g class="nf-mark" data-i="{i}" tabindex="0"><title>{_e(s.get("name"))}：{_e(s.get("display") or v)}</title>'
-                     f'<rect x="{x}" y="{y + 10 + bh - hh:.1f}" width="{colw * 0.5:.1f}" height="{hh:.1f}" rx="4" fill="{"var(--amber)" if i == 0 else "var(--ink-subtle)"}" fill-opacity="{1 if i == 0 else .45}"/>'
-                     f'{_text(x + colw * 0.5 + 8, y + 10 + bh, s.get("display") or _fmt(v, spec.get("unit")), 18 if not narrow else 15, "var(--ink)", weight=900)}</g>')
+                     f'<rect x="{x}" y="{y + 10 + bh - hh:.1f}" width="{colw * (0.3 if narrow else 0.5):.1f}" height="{hh:.1f}" rx="4" fill="{"var(--amber)" if i == 0 else "var(--ink-subtle)"}" fill-opacity="{1 if i == 0 else .45}"/>'
+                     f'{_text(x + colw * (0.3 if narrow else 0.5) + 8, y + 10 + bh, _short(s.get("display") or _fmt(v, spec.get("unit")), (colw * 0.7 - 12) / 15), 18 if not narrow else 15, "var(--ink)", weight=900)}</g>')
             y += bh + 26
             if spec.get("value_label"):
                 body += _text(x, y, spec["value_label"], 12, "var(--ink-subtle)")
